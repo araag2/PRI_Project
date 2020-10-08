@@ -5,6 +5,7 @@ import whoosh
 import os
 import glob
 
+## Exercise 4.1 from Lab1
 def inverted_index(dic):
     os.chdir(dic)
     files = glob.glob('*.txt')
@@ -29,6 +30,7 @@ def inverted_index(dic):
     print(index)
     return index
 
+## Exercise 4.2 from Lab1
 def statistics(index):
     n_seen_id = []
     n_documents = 0
