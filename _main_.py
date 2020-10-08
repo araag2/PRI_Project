@@ -1,7 +1,9 @@
+# --------------------------------
 # 1st Delivery of the PRI project
 # 86379 - Ana Evans
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
+# --------------------------------
 
 import sklearn
 import spacy
@@ -41,7 +43,7 @@ def extract_topic_query(q, I, k, **kwargs):
 # extract topic query and then search for matching* documents using the Boolean IR model
 
 # @output the altered collection, specifically an ordered list of document identifiers
-def boolean_query(q,k,I, **kargs):
+def boolean_query(q, k, I, **kwargs):
     return
 
 # @input topic q ∈ Q (identifier), number of top documents to return (p), index I,
@@ -52,7 +54,7 @@ def boolean_query(q,k,I, **kargs):
 
 # @output ordered set of top-p documents, specifically a list of pairs – (document
 # identifier, scoring) – ordered in descending order of score
-def ranking(q, p, I, **kargs):
+def ranking(q, p, I, **kwargs):
     return
 
 # @input set of topics Qtest ⊆ Q, document collection D_test, relevance feedback
@@ -65,5 +67,5 @@ def ranking(q, p, I, **kargs):
 
 # @output extensive evaluation statistics for the inpufied queries, including recalland-precision 
 # curves at difierent output sizes, MAP, BPREF analysis, cumulative gains and eficiency
-def evaluation(Q_test, R_test, D_test, **kargs):
+def evaluation(Q_test, R_test, D_test, **kwargs):
     return
