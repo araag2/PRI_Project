@@ -4,15 +4,19 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
+import sys
+import os, os.path
+import shutil
+import re
+import time
 import sklearn
 import spacy
+import whoosh
+from whoosh import index
+from whoosh.fields import *
 import nltk
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
-import whoosh
-import os
-import sys
-import re
 from bs4 import BeautifulSoup
 
 #--------------------------------------------------
@@ -63,7 +67,7 @@ def processing(text):
 
     p_tokens = []
 
-    # TODO: Lem and Stem these dudes
+    # TODO: Lem and Stem
     #nltk.stem.snowball.EnglishStemmer()
 
     lemma = WordNetLemmatizer()
@@ -87,14 +91,39 @@ def processing(text):
 # @output tuple with the inverted index I, indexing time and space required
 # --------------------------------------------------------------------------------
 def indexing(D, **kwargs):
-    for doc in D:
+    ind_id = '1'
+
+    start_time = time.time()
+    ind_name = 'index{}'.format(ind_id)
+    ind_dir = '{}_dir'.format(ind_name)
+
+    if os.path.exists(ind_dir):
+        shutil.rmtree(ind_dir)
+        os.mkdir(ind_dir)
+    else:
+        os.mkdir(ind_dir)
+
+    schema = Schema(id= NUMERIC(stored=True), context =TEXT)
+    ind = index.create_in(ind_dir, schema=schema, indexname=ind_name)
+    ind_writer = ind.writer()
+
+    if not index.exists_in(ind_dir, indexname=ind_name):
+        print("Error creating index")
+        return
+
+    #for doc in D:
         #p_headline = 
         #print(doc.title)
         #print(doc.headline)
         #print(doc.byline)
         #print(doc.dateline)
         #print(doc.find_all('text'))
-        print(doc.get_text())
+        #print(doc.get_text())
+
+    time_required = 'Time Elapsed {:4f} seconds'.format(time.time() - start_time)
+    size_required = 'Size required {} bytes'.format(os.path.getsize(ind_dir))
+    print(time_required)
+    print(size_required)
 
     return None
 
@@ -149,10 +178,12 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
     return
 
 # --------------------------------------------------------------------------------
-# ~ Just the Mainst  Function ~
+# ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
+
     D_set = get_files_from_directory('../rcv1_test/test/')    #test
-    print(processing("Mice and cheeses"))
+    indexing(D_set)
+    #print(processing("Mice and cheeses"))
 
 main()
