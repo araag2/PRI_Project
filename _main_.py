@@ -64,7 +64,6 @@ def processing(text):
     p_tokens = []
 
     # TODO: Lem and Stem these dudes
-    #nltk.WordNetLemmatizer()
     #nltk.stem.snowball.EnglishStemmer()
 
     lemma = WordNetLemmatizer()
@@ -98,8 +97,6 @@ def indexing(D, **kwargs):
         print(doc.get_text())
 
     return None
-
-
 
 # ------------------------------------------------------------------------------------------
 # @input topic q ∈ Q (identifier), inverted index I, number of top terms for the
