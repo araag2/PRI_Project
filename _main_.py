@@ -21,6 +21,26 @@ from nltk import WordNetLemmatizer
 from bs4 import BeautifulSoup
 from lxml import etree
 
+global topics
+# -------------------------------------------------
+# Auxiliary function that gathers all topics
+# -------------------------------------------------
+def getTopics():
+    global topics
+    topics = {}
+    topic_f = open('material/topics.txt', 'r')
+    parsed_file = BeautifulSoup(topic_f.read(), 'lxml')
+
+    topic_list = parsed_file.find_all('top')
+
+    for topic in topic_list:
+        split_topic = topic.getText().split('\n')
+        split_topic = list(filter(lambda x: x!='', split_topic))
+
+        number = split_topic[0].split(' ')[2][1:]
+        title = processing(split_topic[1])
+        topics[int(number)] = re.sub(' +',' ',title)  
+    return
 #--------------------------------------------------
 # Get files recursively
 #--------------------------------------------------
@@ -73,15 +93,16 @@ def processing(text):
     #nltk.stem.snowball.EnglishStemmer()
     lemma = WordNetLemmatizer()
 
-    #Remove stopwords and punctuation
+    #Remove stopwords
     for word in tokens:
-        if word.isalpha() and word not in stopwords.words('English'):
+        if word not in stopwords.words('English'):
             word = lemma.lemmatize(word)
             string_tokens += ' {}'.format(word)
-    return string_tokens[1:]
 
-    
-# TODO
+    #Remove punctuation
+    string_tokens = re.sub("[/-]"," ",string_tokens)
+    string_tokens = re.sub("[.,;:\"\'!?`´]","",string_tokens)
+    return string_tokens[1:]
 
 # --------------------------------------------------------------------------------
 # @input D and optional set of arguments on text preprocessing
@@ -104,7 +125,7 @@ def indexing(D, **kwargs):
     else:
         os.mkdir(ind_dir)
 
-    schema = Schema(id= NUMERIC(stored=True), content= TEXT)
+    schema = Schema(id= NUMERIC(stored=True), content= TEXT(stored=True))
     ind = index.create_in(ind_dir, schema=schema, indexname=ind_name)
     ind_writer = ind.writer()
 
@@ -117,14 +138,13 @@ def indexing(D, **kwargs):
         title = processing(re.sub('<[^<]+>', "", str(doc.title)))
         dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)))
         text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1])
-
-        ind_writer.add_document(id=item_id, content=u'{} {} {}'.format(title, dateline, text))
-        print(item_id)
+        
+        result = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
+        #print(result)
+        ind_writer.add_document(id=item_id, content=result)
+        #print(item_id)
 
     ind_writer.commit()
-
-    for i in ind.searcher().documents():
-        print(i)
     
     time_required = round(time.time() - start_time, 6)
     
@@ -142,14 +162,22 @@ def indexing(D, **kwargs):
 # @output list of k terms (a term can be either a word or phrase)
 # ------------------------------------------------------------------------------------------
 def extract_topic_query(q, I, k, **kwargs):
+    global topics 
+    topic = topics[q]
 
+    topic_terms = [] 
     with I.searcher() as searcher:
-        parser = QueryParser("content", I.schema, group=OrGroup).parse(q)
+        parser = QueryParser("content", I.schema, group=OrGroup).parse(topic)
         results = searcher.search(parser, limit=None)
-        print(results[0])
-        res_list = [r.values()[0] for r in results]
-        print(res_list)
-        
+        res_list = [int(r.values()[1]) for r in results]
+
+        numbers_list = []
+        for i in res_list:
+            numbers_list += [searcher.document_number(id=i),]
+        #TODO: Implement **kwargs for the model='' attribute
+        topic_terms = searcher.key_terms(numbers_list, "content", numterms=5)
+          
+    print(topic_terms)
     return res_list
 
 # ------------------------------------------------------------------------------------------
@@ -195,9 +223,11 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
+    getTopics()
 
     D_set = get_files_from_directory('../rcv1_test/19960820/')    #test
     index = indexing(D_set)
-    extract_topic_query("USA is amaziiing", index[0], 5)
+    print(index)
+    extract_topic_query(200, index[0], 5)
 
 main()
