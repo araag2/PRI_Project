@@ -101,7 +101,7 @@ def processing(text):
 
     #Remove punctuation
     string_tokens = re.sub("[/-]"," ",string_tokens)
-    string_tokens = re.sub("[.,;:\"\'!?`´]","",string_tokens)
+    string_tokens = re.sub("[.,;:\"\'!?`´()$£€]","",string_tokens)
     return string_tokens[1:]
 
 # --------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ def indexing(D, **kwargs):
     
     time_required = round(time.time() - start_time, 6)
     
-    #TODO: Fix me the size is wrong and wonky
+    #TODO: Fixme the size is wrong and wonky
     space_required = os.path.getsize(ind_dir)
 
     return (ind, time_required, space_required)
@@ -175,10 +175,40 @@ def extract_topic_query(q, I, k, **kwargs):
         for i in res_list:
             numbers_list += [searcher.document_number(id=i),]
         #TODO: Implement **kwargs for the model='' attribute
-        topic_terms = searcher.key_terms(numbers_list, "content", numterms=5)
-          
-    print(topic_terms)
-    return res_list
+        topic_terms = searcher.key_terms(numbers_list, "content", numterms=k)
+      
+    result = []
+    for term in topic_terms:
+        result += [term[0], ]
+
+    return result
+
+# -------------------------------------------------
+# Auxiliary function that gathers all topics
+# -------------------------------------------------
+def boolean_query_aux(document_lists, k):
+    miss_m = round(0.2*k)
+    seen = []
+    result_docs = []
+
+    for term_docs in document_lists:
+        for doc in term_docs:
+            if doc not in seen:
+                chances = miss_m
+                flag = True
+                for doc_list in document_lists:
+                    if doc not in doc_list:
+                        if chances == 0:
+                            flag = False
+                            break
+                        chances -= 1
+                if flag:
+                    result_docs += [doc,]
+                seen += [doc, ]
+
+    result_docs.sort()
+    print(result_docs)
+    return result_docs
 
 # ------------------------------------------------------------------------------------------
 # @input topic q (identifer), number of top terms k, and index I
@@ -189,7 +219,17 @@ def extract_topic_query(q, I, k, **kwargs):
 # @output the altered collection, specifically an ordered list of document identifiers
 # ------------------------------------------------------------------------------------------
 def boolean_query(q, k, I, **kwargs):
-    return
+    terms = extract_topic_query(q, I, k)
+
+    document_lists = []
+    with I.searcher() as searcher:
+        for term in terms:
+            parser = QueryParser("content", I.schema, group=OrGroup).parse(term)
+            results = searcher.search(parser, limit=None)
+            term_list = [int(r.values()[1]) for r in results]
+            document_lists += [term_list,]
+            
+    return boolean_query_aux(document_lists, k)
 
 # ------------------------------------------------------------------------------------------------
 # @input topic q ∈ Q (identifier), number of top documents to return (p), index I,
@@ -229,5 +269,6 @@ def main():
     index = indexing(D_set)
     print(index)
     extract_topic_query(200, index[0], 5)
+    boolean_query(200, 1, index[0])
 
 main()
