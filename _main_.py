@@ -13,11 +13,13 @@ import sklearn
 import spacy
 import whoosh
 from whoosh import index
+from whoosh.qparser import *
 from whoosh.fields import *
 import nltk
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
 from bs4 import BeautifulSoup
+from lxml import etree
 
 #--------------------------------------------------
 # Get files recursively
@@ -65,19 +67,18 @@ def processing(text):
     # Tokenization
     tokens = nltk.word_tokenize(text)
 
-    p_tokens = []
+    string_tokens = ''
 
     # TODO: Lem and Stem
     #nltk.stem.snowball.EnglishStemmer()
-
     lemma = WordNetLemmatizer()
 
     #Remove stopwords and punctuation
     for word in tokens:
         if word.isalpha() and word not in stopwords.words('English'):
             word = lemma.lemmatize(word)
-            p_tokens += [word, ]
-    return p_tokens
+            string_tokens += ' {}'.format(word)
+    return string_tokens[1:]
 
     
 # TODO
@@ -103,7 +104,7 @@ def indexing(D, **kwargs):
     else:
         os.mkdir(ind_dir)
 
-    schema = Schema(id= NUMERIC(stored=True), context =TEXT)
+    schema = Schema(id= NUMERIC(stored=True), content= TEXT)
     ind = index.create_in(ind_dir, schema=schema, indexname=ind_name)
     ind_writer = ind.writer()
 
@@ -111,21 +112,26 @@ def indexing(D, **kwargs):
         print("Error creating index")
         return
 
-    #for doc in D:
-        #p_headline = 
-        #print(doc.title)
-        #print(doc.headline)
-        #print(doc.byline)
-        #print(doc.dateline)
-        #print(doc.find_all('text'))
-        #print(doc.get_text())
+    for doc in D:
+        item_id = doc.newsitem.get('itemid')
+        title = processing(re.sub('<[^<]+>', "", str(doc.title)))
+        dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)))
+        text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1])
 
-    time_required = 'Time Elapsed {:4f} seconds'.format(time.time() - start_time)
-    size_required = 'Size required {} bytes'.format(os.path.getsize(ind_dir))
-    print(time_required)
-    print(size_required)
+        ind_writer.add_document(id=item_id, content=u'{} {} {}'.format(title, dateline, text))
+        print(item_id)
 
-    return None
+    ind_writer.commit()
+
+    for i in ind.searcher().documents():
+        print(i)
+    
+    time_required = round(time.time() - start_time, 6)
+    
+    #TODO: Fix me the size is wrong and wonky
+    space_required = os.path.getsize(ind_dir)
+
+    return (ind, time_required, space_required)
 
 # ------------------------------------------------------------------------------------------
 # @input topic q ∈ Q (identifier), inverted index I, number of top terms for the
@@ -136,7 +142,15 @@ def indexing(D, **kwargs):
 # @output list of k terms (a term can be either a word or phrase)
 # ------------------------------------------------------------------------------------------
 def extract_topic_query(q, I, k, **kwargs):
-    return
+
+    with I.searcher() as searcher:
+        parser = QueryParser("content", I.schema, group=OrGroup).parse(q)
+        results = searcher.search(parser, limit=None)
+        print(results[0])
+        res_list = [r.values()[0] for r in results]
+        print(res_list)
+        
+    return res_list
 
 # ------------------------------------------------------------------------------------------
 # @input topic q (identifer), number of top terms k, and index I
@@ -182,8 +196,8 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 # --------------------------------------------------------------------------------
 def main():
 
-    D_set = get_files_from_directory('../rcv1_test/test/')    #test
-    indexing(D_set)
-    #print(processing("Mice and cheeses"))
+    D_set = get_files_from_directory('../rcv1_test/19960820/')    #test
+    index = indexing(D_set)
+    extract_topic_query("USA is amaziiing", index[0], 5)
 
 main()
