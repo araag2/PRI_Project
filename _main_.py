@@ -13,6 +13,7 @@ import sklearn
 import spacy
 import whoosh
 from whoosh import index
+from whoosh import scoring
 from whoosh.qparser import *
 from whoosh.fields import *
 import nltk
@@ -183,9 +184,9 @@ def extract_topic_query(q, I, k, **kwargs):
 
     return result
 
-# -------------------------------------------------
-# Auxiliary function that gathers all topics
-# -------------------------------------------------
+# ----------------------------------------------------------------
+# Auxiliary function that gathers all documents with the top terms
+# ----------------------------------------------------------------
 def boolean_query_aux(document_lists, k):
     miss_m = round(0.2*k)
     seen = []
@@ -242,7 +243,19 @@ def boolean_query(q, k, I, **kwargs):
 # identifier, scoring) – ordered in descending order of score
 # -------------------------------------------------------------------------------------------------
 def ranking(q, p, I, **kwargs):
-    return
+    global topics
+    topic = topics[q]
+
+    weight_vector = scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)
+    with I.searcher(weighting=weight_vector) as searcher:
+        parser = QueryParser("content", I.schema, group=OrGroup).parse(topic)
+        results = searcher.search(parser, limit=p)
+        
+        term_list = []
+        for i in range(p):
+            term_list += [(results[i].values()[1], results.score(i)), ]
+
+    return term_list
 
 # -------------------------------------------------------------------------------------------------
 # @input set of topics Qtest ⊆ Q, document collection D_test, relevance feedback
@@ -267,8 +280,9 @@ def main():
 
     D_set = get_files_from_directory('../rcv1_test/19960820/')    #test
     index = indexing(D_set)
-    print(index)
-    extract_topic_query(200, index[0], 5)
-    boolean_query(200, 1, index[0])
+    #extract_topic_query(200, index[0], 5)
+    #boolean_query(200, 1, index[0])
+
+    print(ranking(200, 5, index[0]))
 
 main()
