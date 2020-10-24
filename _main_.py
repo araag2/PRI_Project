@@ -4,32 +4,41 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
-import sys
 import os, os.path
-import shutil
 import re
+import sys
 import time
-import sklearn
+import nltk
 import spacy
 import whoosh
+import shutil
+import sklearn
+from bs4 import BeautifulSoup
+from lxml import etree
 from whoosh import index
 from whoosh import scoring
 from whoosh.qparser import *
 from whoosh.fields import *
-import nltk
+from sklearn.metrics import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
-from bs4 import BeautifulSoup
-from lxml import etree
 
-global topics
-# -------------------------------------------------
-# Auxiliary function that gathers all topics
-# -------------------------------------------------
-def getTopics():
+topics = {}
+index_id = 1
+# -----------------------------------------------------------------------
+# getTopics - Auxiliary function that gathers info on all topics
+#
+# Input: directory - Directory path for project materials
+# 
+# Behaviour: Extracts topic info from '{directory}topics.txt' and updates
+# the global dictionary which stores topic info
+#
+# Output: None
+# -----------------------------------------------------------------------
+def getTopics(directory):
     global topics
-    topics = {}
-    topic_f = open('material/topics.txt', 'r')
+    
+    topic_f = open('{}topics.txt'.format(directory), 'r')
     parsed_file = BeautifulSoup(topic_f.read(), 'lxml')
 
     topic_list = parsed_file.find_all('top')
@@ -42,6 +51,41 @@ def getTopics():
         title = processing(split_topic[1])
         topics[int(number)] = re.sub(' +',' ',title)  
     return
+
+# -------------------------------------------------------------------------------------------------
+# get_R_set - Auxiliary function that extracts the R set
+#
+# Input: directory - Directory path for project materials
+# 
+# Behaviour: Extracts the triplet (Topic id, Document id, Feedback) for each entry in the 
+# R set, present in '{directory}qrels_test.txt' (R-test) and '{directory}qrels_test.txt' (R-train)
+#
+# Output: [R-Test, R-Train], each being a list of triplet entries
+# -------------------------------------------------------------------------------------------------
+def get_R_set(directory):
+
+    r_test_f = open('{}qrels_test.txt'.format(directory), 'r')
+    r_train_f = open('{}qrels_train.txt'.format(directory), 'r')
+
+    r_test_lines = r_test_f.readlines()
+    r_train_lines = r_train_f.readlines()
+
+    r_test_lines = [r_test_lines, r_train_lines]
+    r_set = [{},{}]
+    
+    for i in range(2):
+        for line in r_test_lines[i]:
+            split_entry = line.split(' ')
+            topic_id = int(split_entry[0][1:])
+            doc_id = int(split_entry[1])
+            feedback = int(split_entry[2])
+            
+            if topic_id not in r_set[i]:
+                r_set[i][topic_id] = {}
+            r_set[i][topic_id][doc_id] = feedback
+
+    return r_set
+
 #--------------------------------------------------
 # Get files recursively
 #--------------------------------------------------
@@ -53,7 +97,7 @@ def get_xml_files_recursively(path):
         if os.path.isdir(n_path):
             files_list.extend(get_xml_files_recursively(n_path))
         else:
-            files_list.append('{}{}'.format(path,f))
+            files_list.append(re.sub('//','/','{}/{}'.format(path,f)))
     return files_list
 
 # -------------------------------------------------
@@ -61,9 +105,14 @@ def get_xml_files_recursively(path):
 # -------------------------------------------------
 def get_files_from_directory(path):
     file_list = get_xml_files_recursively(path)
-    parsed_files = []
+
+    parsed_files_test = []
+    parsed_files_train = []
 
     for f in file_list:
+        print(f)
+        date_identifier = int(f.split('/')[2])
+
         open_file = open(f, 'r')
         parsed_file = BeautifulSoup(open_file.read(), 'lxml')
         
@@ -73,9 +122,12 @@ def get_files_from_directory(path):
         if parsed_file.codes != None:
             parsed_file.codes.decompose()
               
-        parsed_files += [parsed_file,]
+        if date_identifier <= 19960930:
+            parsed_files_train += [parsed_file,]
+        else:
+            parsed_files_test += [parsed_file,]
 
-    return parsed_files
+    return (parsed_files_test, parsed_files_train)
 
 # -------------------------------------------------
 # Preprocessing function
@@ -114,10 +166,10 @@ def processing(text):
 # @output tuple with the inverted index I, indexing time and space required
 # --------------------------------------------------------------------------------
 def indexing(D, **kwargs):
-    ind_id = '1'
+    global index_id
 
     start_time = time.time()
-    ind_name = 'index{}'.format(ind_id)
+    ind_name = 'index{}'.format(str(index_id))
     ind_dir = '{}_dir'.format(ind_name)
 
     if os.path.exists(ind_dir):
@@ -141,16 +193,18 @@ def indexing(D, **kwargs):
         text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1])
         
         result = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
-        #print(result)
         ind_writer.add_document(id=item_id, content=result)
-        #print(item_id)
 
     ind_writer.commit()
     
     time_required = round(time.time() - start_time, 6)
     
+    index_id += 1
+
     #TODO: Fixme the size is wrong and wonky
     space_required = os.path.getsize(ind_dir)
+    print(ind_dir)
+    print(space_required)
 
     return (ind, time_required, space_required)
 
@@ -208,7 +262,6 @@ def boolean_query_aux(document_lists, k):
                 seen += [doc, ]
 
     result_docs.sort()
-    print(result_docs)
     return result_docs
 
 # ------------------------------------------------------------------------------------------
@@ -258,6 +311,17 @@ def ranking(q, p, I, **kwargs):
     return term_list
 
 # -------------------------------------------------------------------------------------------------
+# Auxiliry function
+# -------------------------------------------------------------------------------------------------
+def find_relevant_R_test(R_test):
+    relevant_docs = []
+    for doc in R_test:
+        if R_test[doc] == 1:
+            relevant_docs += [doc, ]
+
+    return relevant_docs
+
+# -------------------------------------------------------------------------------------------------
 # @input set of topics Qtest ⊆ Q, document collection D_test, relevance feedback
 # R_test, arguments on text processing and retrieval models
 
@@ -270,19 +334,32 @@ def ranking(q, p, I, **kwargs):
 # curves at difierent output sizes, MAP, BPREF analysis, cumulative gains and eficiency
 # -------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
+    I = indexing(D_test)[0]
+
+    results = {}
+
+    for q in Q_test:
+        boolean_docs = boolean_query(q, 2, I)
+        ranked_docs = ranking(q, 10, I)
+        relevant_docs = find_relevant_R_test(R_test[q])
+
+        print(boolean_docs)
+        print(ranked_docs)
+        print(relevant_docs)
+
     return
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    getTopics()
+    material_dic = 'material/'
 
-    D_set = get_files_from_directory('../rcv1_test/19960820/')    #test
-    index = indexing(D_set)
-    #extract_topic_query(200, index[0], 5)
-    #boolean_query(200, 1, index[0])
+    D_set = get_files_from_directory('../rcv1/19961001')    #test
+    R_set = get_R_set(material_dic)
+    getTopics(material_dic)
 
-    print(ranking(200, 5, index[0]))
+    Q_test = [101]
+    evaluation(Q_test, R_set[0], D_set[0])    
 
 main()
