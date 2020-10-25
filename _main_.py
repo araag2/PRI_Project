@@ -22,6 +22,7 @@ from whoosh.fields import *
 from sklearn.metrics import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
+from textblob import TextBlob
 
 topics = {}
 index_id = 1
@@ -87,7 +88,14 @@ def get_R_set(directory):
     return r_set
 
 #--------------------------------------------------
-# Get files recursively
+# get_xml_files_recursively - Auxiliary function to get_files_from_directory
+#
+# Input: path - The path to the parent directory or file from which to start our recursive function
+#               
+# Behaviour: Creates a list with the path to every file that's an hierarquical child of parent directory path,
+# recursively going through each child in Post-Order traversing
+#
+# Output: A List with the paths to each file child
 #--------------------------------------------------
 def get_xml_files_recursively(path):
     files_list = []
@@ -101,7 +109,17 @@ def get_xml_files_recursively(path):
     return files_list
 
 # -------------------------------------------------
-# Auxiliary function to get all files from a folder
+# get_files_from_directory - Recursively gets all files from directory or file path, parsing the files from xml to objects
+# and spliting them in D_Test and D_Train in the conditions specified by our project
+#
+# Input: path - The path to the parent directory or file from which to start our search
+#               
+# Behaviour: It starts by creating a list with the path to every file that's an hierarquical child of parent directory path,
+# recursively going through each child in Post-Order traversing. Afterwards it parses each and every file from xml to a runtime
+# object using the BeautifulSoup library. At last after having all files in object form it splits the dataset in D_Test and D_Train
+# sets, according to their identifier (D_Test -> identifier > 1996-09-30   D_Train -> identifier <= 1996-09-30)
+#
+# Output: A List with the Lists of file objects present in D_Test and D_Train
 # -------------------------------------------------
 def get_files_from_directory(path):
     file_list = get_xml_files_recursively(path)
@@ -129,41 +147,100 @@ def get_files_from_directory(path):
 
     return (parsed_files_test, parsed_files_train)
 
-# -------------------------------------------------
-# Preprocessing function
-# -------------------------------------------------
-def processing(text):
-    
+# -----------------------------------------------------------------------------------------------------------
+# processing - Processes text in String form
+#
+# Input: text - The text in String form to be processed
+#        **kwargs - Optional named arguments, with the following functionality (default values prefixed by *)
+#               lowercasing [*True | False]: Flag to perform Lowercasing 
+#               punctuation [*True | False]: Flag to remove punction
+#               spellcheck [True | *False]: Flag to perform spell check using TextBlob
+#               stopwords [*True | False]: Flag to remove Stop Words 
+#               simplication [*lemmatization | stemming | None]: Flag to perform Lemmatization or Stemming
+#               
+# Behaviour: Procceses the text in the input argument text as refered to by the arguments in **kwargs,
+# behaviour being completely dependent on them except for Tokenization which is always performed
+#
+# Output: A String with the processed text 
+# ----------------------------------------------------------------------------------------------------------
+def processing(text, **kwargs):
+
+    p_text = text
     # Lowercasing the entire string
-    text = text.lower()
-
-    # Tokenization
-    tokens = nltk.word_tokenize(text)
-
-    string_tokens = ''
-
-    # TODO: Lem and Stem
-    #nltk.stem.snowball.EnglishStemmer()
-    lemma = WordNetLemmatizer()
-
-    #Remove stopwords
-    for word in tokens:
-        if word not in stopwords.words('English'):
-            word = lemma.lemmatize(word)
-            string_tokens += ' {}'.format(word)
+    if 'lowercasing' not in kwargs or kwargs['lowercasing']:
+        p_text = p_text.lower()
 
     #Remove punctuation
-    string_tokens = re.sub("[/-]"," ",string_tokens)
-    string_tokens = re.sub("[.,;:\"\'!?`´()$£€]","",string_tokens)
+    if 'punctuation' not in kwargs or kwargs['punctuation']:
+        p_text = re.sub("[/-]"," ",p_text)
+        p_text = re.sub("[.,;:\"\'!?`´()$£€]","",p_text)
+
+    # Spell Check
+    if "spellcheck" in kwargs and kwargs['spellcheck']:          
+        p_text = str(TextBlob(p_text).correct())
+
+    # Tokenization
+    tokens = nltk.word_tokenize(p_text)
+    string_tokens = ''
+
+    # Spell Check correction
+    if "spellcheck" in kwargs and kwargs['spellcheck']:
+        n_tokens = []
+        for word in tokens:           
+            n_tokens += ' {}'.format(TextBlob(word).correct)
+
+    # Lemmatization
+    if 'simplification' not in kwargs or kwargs['simplification'] == 'lemmatization':
+        lemma = WordNetLemmatizer()
+
+        #Remove stopwords
+        if 'stopwords' not in kwargs or kwargs['stopwords']:
+            for word in tokens:
+                if word not in stopwords.words('English'):   
+                    string_tokens += ' {}'.format(lemma.lemmatize(word))
+        else: 
+            for word in tokens: 
+                string_tokens += ' {}'.format(lemma.lemmatize(word))
+
+    # Stemming
+    elif kwargs['simplification'] == 'stemming':
+        stemer = nltk.stem.snowball.EnglishStemmer()
+
+        #Remove stopwords
+        if 'stopwords' not in kwargs or kwargs['stopwords']:
+            for word in tokens:
+                if word not in stopwords.words('English'):   
+                    string_tokens += ' {}'.format(stemer.stem(word))
+        else: 
+            for word in tokens: 
+                string_tokens += ' {}'.format(stemer.stem(word))
+
+    # Case for no simplification
+    else:
+        for word in tokens: 
+            string_tokens += ' {}'.format(word)   
+
+    # Removing the first whitespace in the output 
     return string_tokens[1:]
 
 # --------------------------------------------------------------------------------
-# @input D and optional set of arguments on text preprocessing
-
-# @behavior preprocesses each document in D and builds an efficient inverted index
-# (with the necessary statistics for the subsequent functions)
-
-# @output tuple with the inverted index I, indexing time and space required
+# indexing - Creates an index after processing all text on data set D
+#
+# Input: D - The data set we will be building the index with
+#        **kwargs - Optional named arguments for text preprocessing, with the following functionality (default values prefixed by *)
+#               lowercasing [*True | False]: Flag to perform Lowercasing 
+#               punctuation [*True | False]: Flag to remove punction
+#               spellcheck [True | *False]: Flag to perform spell check using TextBlob
+#               stopwords [*True | False]: Flag to remove Stop Words 
+#               simplication [*lemmatization | stemming | None]: Flag to perform Lemmatization or Stemming
+#               
+# Behaviour: This function starts by creating the directory for our Index, after initializing our Schema fields. It then
+# processes all documents on data set D and stores valuable information from them on the index (identifier, title, dateline and text).
+# At last it commits the resulting processed documents to our index and calculates the total computational time the function used and the
+# Disk space required to store the index.
+#
+# Output: A triplet tuple with the Inverted Index in object structure, the computational time for the function and 
+# the disk space required to store the Inverted Index 
 # --------------------------------------------------------------------------------
 def indexing(D, **kwargs):
     global index_id
@@ -188,9 +265,9 @@ def indexing(D, **kwargs):
 
     for doc in D:
         item_id = doc.newsitem.get('itemid')
-        title = processing(re.sub('<[^<]+>', "", str(doc.title)))
-        dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)))
-        text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1])
+        title = processing(re.sub('<[^<]+>', "", str(doc.title)), **kwargs)
+        dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)), **kwargs)
+        text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1], **kwargs)
         
         result = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
         ind_writer.add_document(id=item_id, content=result)
@@ -208,20 +285,59 @@ def indexing(D, **kwargs):
 
     return (ind, time_required, space_required)
 
-# ------------------------------------------------------------------------------------------
-# @input topic q ∈ Q (identifier), inverted index I, number of top terms for the
-# topic (k), and optional arguments on scoring
-
-# @behavior selects the top-k informative terms in q against I using parameterizable scoring
-
-# @output list of k terms (a term can be either a word or phrase)
-# ------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------------
+# extract_topic_query - Return the top-k informative terms from the topic q agains I using parameterizable scoring
+#
+# Input: q - The identifier number of the topic we want to search about
+#        I - The Index object in which we will perform our search
+#        k - The number of top-k terms to return 
+#        **kwargs - Optional named arguments to parameterize scoring, with the following functionality (default values prefixed by *)
+#               scoring [freq | tf-idf | dfree | pl2 |*bm25] - Chooses the scoring model we will use to score our terms
+#               C [float | *1.0] - Free parameter for the pl2 model
+#               B [float | *0.75] - Free parameter for the BM25 model
+#               content_B [float | *1.0] - Free parameter specific to the content field for the BM25 model
+#               k1 [float | *1.5] - Free parameter for the BM25 model
+#
+# Behaviour: Extracting the relevant model information from **kwargs, this function uses the index I present in its arguments 
+# to perform a scored search on the top-k informative terms for topic q. It does so by creating a QueryParser object to parse
+# the entire lenght of terms from q we've stored in our global topics structure and by using searcher.key_terms() to return
+# the top terms according to our scoring weight vector. 
+#
+# Output: A List that contains the top k terms 
+# -----------------------------------------------------------------------------------------------------------------------------------------
 def extract_topic_query(q, I, k, **kwargs):
     global topics 
     topic = topics[q]
 
-    topic_terms = [] 
-    with I.searcher() as searcher:
+    topic_terms = []
+    weight_vector = None
+
+    # Chooses which score model to use from kwargs
+    if 'scoring' not in kwargs:
+        weight_vector = scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)
+
+    elif kwargs['scoring'] == 'freq':
+        weight_vector = scoring.Frequency()
+
+    elif kwargs['scoring'] == 'tf-idf':
+        weight_vector = scoring.TF_IDF()
+
+    elif kwargs['scoring'] == 'dfree':
+        weight_vector = scoring.DFree()
+
+    elif kwargs['scoring'] == 'pl2':
+        C = 1.0 if 'C' not in kwargs else kwargs['C']
+
+        weight_vector = scoring.PL2(c=C)
+
+    elif kwargs['scoring'] == 'bm25':
+        b = 0.75 if 'B' not in kwargs else kwargs['B']
+        content_b = 1.0 if 'content_B' not in kwargs else kwargs['content_B']
+        k1 = 1.5 if 'K1' not in kwargs else kwargs['K1']
+
+        weight_vector = scoring.BM25F(B=b, content_B=content_b, K1=k1)    
+
+    with I.searcher(weighting=weight_vector) as searcher:
         parser = QueryParser("content", I.schema, group=OrGroup).parse(topic)
         results = searcher.search(parser, limit=None)
         res_list = [int(r.values()[1]) for r in results]
@@ -229,8 +345,8 @@ def extract_topic_query(q, I, k, **kwargs):
         numbers_list = []
         for i in res_list:
             numbers_list += [searcher.document_number(id=i),]
-        #TODO: Implement **kwargs for the model='' attribute
-        topic_terms = searcher.key_terms(numbers_list, "content", numterms=k)
+
+        topic_terms = searcher.key_terms(numbers_list, "content", numterms=k, normalize=True)
       
     result = []
     for term in topic_terms:
@@ -238,9 +354,21 @@ def extract_topic_query(q, I, k, **kwargs):
 
     return result
 
-# ----------------------------------------------------------------
-# Auxiliary function that gathers all documents with the top terms
-# ----------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------------------
+# boolean_query_aux - Auxiliary function to boolean_query that will check repeated ocurrences of documents
+#
+# Input: document_lists - A List of Lists in which each inner List has all documents in which the n-th term appeared
+#        k - The number of terms we are using
+#
+# Behaviour: The function starts by calculating our error margin, in other words the number of missmatches a document
+# can have before we stop considering it as relevant. This function composes a very simple algorithmn, where for each
+# document we find in a sublist (non repeated, we use the list 'seen' to check that) we check if it's contained within 
+# all other sublists, until it's not contained in miss_m + 1 lists. When that's the case, the document is no longer 
+# relevant and we move on to the next one, iterating upon all elements of all sublists. The Time Complexity of this 
+# function is O(N^2) while the Space Complexity is O(N)
+#
+# Output: A List of all relevants docs that don't exceed miss_m missmatches
+# -------------------------------------------------------------------------------------------------------------------
 def boolean_query_aux(document_lists, k):
     miss_m = round(0.2*k)
     seen = []
@@ -273,7 +401,7 @@ def boolean_query_aux(document_lists, k):
 # @output the altered collection, specifically an ordered list of document identifiers
 # ------------------------------------------------------------------------------------------
 def boolean_query(q, k, I, **kwargs):
-    terms = extract_topic_query(q, I, k)
+    terms = extract_topic_query(q, I, k, **kwargs)
 
     document_lists = []
     with I.searcher() as searcher:
@@ -355,11 +483,14 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 def main():
     material_dic = 'material/'
 
-    D_set = get_files_from_directory('../rcv1/19961001')    #test
-    R_set = get_R_set(material_dic)
+    #R_set = get_R_set(material_dic)
     getTopics(material_dic)
 
-    Q_test = [101]
-    evaluation(Q_test, R_set[0], D_set[0])    
+    D_set = get_files_from_directory('../rcv1_test/19961001')    #test
+    I = indexing(D_set[0])
+    extract_topic_query(101, I[0], 5, scoring='bm25')
+
+    #Q_test = [101]
+    #evaluation(Q_test, R_set[0], D_set[0])    
 
 main()
