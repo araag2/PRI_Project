@@ -13,6 +13,8 @@ import spacy
 import whoosh
 import shutil
 import sklearn
+import math
+import numpy as np
 from bs4 import BeautifulSoup
 from lxml import etree
 from whoosh import index
@@ -128,7 +130,6 @@ def get_files_from_directory(path):
     parsed_files_train = []
 
     for f in file_list:
-        print(f)
         date_identifier = int(f.split('/')[2])
 
         open_file = open(f, 'r')
@@ -280,8 +281,6 @@ def indexing(D, **kwargs):
 
     #TODO: Fixme the size is wrong and wonky
     space_required = os.path.getsize(ind_dir)
-    print(ind_dir)
-    print(space_required)
 
     return (ind, time_required, space_required)
 
@@ -393,12 +392,18 @@ def boolean_query_aux(document_lists, k):
     return result_docs
 
 # ------------------------------------------------------------------------------------------
-# @input topic q (identifer), number of top terms k, and index I
-
-# @behavior maps the inputed topic into a simplified Boolean query using 
-# extract topic query and then search for matching* documents using the Boolean IR model
-
-# @output the altered collection, specifically an ordered list of document identifiers
+# boolean_query - Function that will query all documents in index I and find those who contain
+# all top k-terms relevant to topic q allowing up to round(0.2*k) missmatches 
+#
+# Input: q - The identifier number of the topic we want to search about 
+#        k - The number of top k-terms to check documents for
+#        I - The Index object in which we will perform our search
+#
+# Behaviour: The function starts by running extract_topic_query to return top k-terms with which
+# we will search for the relevant docs for topic q. Then we use the index I to perform a simple
+# search on, parsing the result of our search per term to our auxiliary function. 
+#
+# Output: A List of all relevants docs that don't exceed miss_m missmatches
 # ------------------------------------------------------------------------------------------
 def boolean_query(q, k, I, **kwargs):
     terms = extract_topic_query(q, I, k, **kwargs)
@@ -412,6 +417,27 @@ def boolean_query(q, k, I, **kwargs):
             document_lists += [term_list,]
             
     return boolean_query_aux(document_lists, k)
+
+
+# ------------------------------------------------------------------------------------------
+# cosine_scoring - Function that scores a document based on cosine similarity 
+#
+# Input: searcher - The searcher associated with the index I
+#        all the other arguments are built-ins from FunctionWeighting() and old whoosh.scoring
+#        documentation
+#
+# Behaviour: Uses the tf-idf result from searcher.idf() and applies cosine similarity formula
+# to it
+#
+# Output: cosine similarity weight vector formula 
+# ------------------------------------------------------------------------------------------
+def cosine_scoring(searcher, fieldnum, text, docnum, weight, QTF=1):
+    idf = searcher.idf(fieldnum, text)
+
+    DTW = (1.0 + math.log(weight)) * idf
+    QMF = 1.0
+    QTW = ((0.5 + (0.5 * QTF/ QMF))) * idf
+    return DTW * QTW
 
 # ------------------------------------------------------------------------------------------------
 # @input topic q ∈ Q (identifier), number of top documents to return (p), index I,
@@ -427,7 +453,21 @@ def ranking(q, p, I, **kwargs):
     global topics
     topic = topics[q]
 
-    weight_vector = scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)
+    weight_vector = None
+    if 'ranking' not in kwargs:
+        weight_vector = scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)
+
+    elif kwargs['ranking'] == 'cosine':
+        weight_vector = scoring.FunctionWeighting(cosine_scoring)
+
+    elif kwargs['ranking'] == 'bm25':
+        b = 0.75 if 'B' not in kwargs else kwargs['B']
+        content_b = 1.0 if 'content_B' not in kwargs else kwargs['content_B']
+        k1 = 1.5 if 'K1' not in kwargs else kwargs['K1']
+
+        weight_vector = scoring.BM25F(B=b, content_B=content_b, K1=k1)  
+
+
     with I.searcher(weighting=weight_vector) as searcher:
         parser = QueryParser("content", I.schema, group=OrGroup).parse(topic)
         results = searcher.search(parser, limit=p)
@@ -439,15 +479,38 @@ def ranking(q, p, I, **kwargs):
     return term_list
 
 # -------------------------------------------------------------------------------------------------
-# Auxiliry function
+# Auxiliary function
 # -------------------------------------------------------------------------------------------------
-def find_relevant_R_test(R_test):
-    relevant_docs = []
+def find_R_test_labels(R_test):
+    r_labels = []
     for doc in R_test:
-        if R_test[doc] == 1:
-            relevant_docs += [doc, ]
+        r_labels += [[doc, R_test[doc]], ]
 
-    return relevant_docs
+    return np.array(r_labels)
+
+# -------------------------------------------------------------------------------------------------
+# Auxiliary function
+# -------------------------------------------------------------------------------------------------
+def find_query_labels(query_docs, r_labels):
+    query_labels = []
+    for doc in r_labels:
+        if doc[0] in query_docs:
+            query_labels += [[doc[0], 1], ]
+        else:
+            query_labels += [[doc[0], 0], ]
+
+    return np.array(query_labels)    
+
+# -------------------------------------------------------------------------------------------------
+# Evaluate
+# -------------------------------------------------------------------------------------------------
+def evaluate(topic, o_labels, sol_labels):
+
+    print("Accuracy of {}: {}".format(topic, accuracy_score(sol_labels, o_labels)))
+    print("Micro Precision of {}: {}".format(topic, precision_score(sol_labels, o_labels, average='micro')))
+    print("Micro F1-score of  {}: {}".format(topic, recall_score(sol_labels, o_labels, average='micro')))
+
+    return
 
 # -------------------------------------------------------------------------------------------------
 # @input set of topics Qtest ⊆ Q, document collection D_test, relevance feedback
@@ -465,16 +528,16 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
     I = indexing(D_test)[0]
 
     results = {}
+    k_range = [1,2,4,6,8,10]
 
     for q in Q_test:
-        boolean_docs = boolean_query(q, 2, I)
-        ranked_docs = ranking(q, 10, I)
-        relevant_docs = find_relevant_R_test(R_test[q])
+        r_labels = find_R_test_labels(R_test[q])
 
-        print(boolean_docs)
-        print(ranked_docs)
-        print(relevant_docs)
+        for k in k_range:
+            boolean_docs = boolean_query(q, k, I)
+            query_labels = find_query_labels(boolean_docs, r_labels)
 
+            evaluate(q, query_labels[:, 1], r_labels[:, 1])
     return
 
 # --------------------------------------------------------------------------------
@@ -483,14 +546,15 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 def main():
     material_dic = 'material/'
 
-    #R_set = get_R_set(material_dic)
+    R_set = get_R_set(material_dic)
     getTopics(material_dic)
 
     D_set = get_files_from_directory('../rcv1_test/19961001')    #test
     I = indexing(D_set[0])
-    extract_topic_query(101, I[0], 5, scoring='bm25')
+    #extract_topic_query(101, I[0], 5, scoring='bm25')
+    #print(ranking(101, 5, I[0], scoring='cosine'))
 
-    #Q_test = [101]
-    #evaluation(Q_test, R_set[0], D_set[0])    
+    Q_test = [101]
+    evaluation(Q_test, R_set[0], D_set[0])    
 
 main()
