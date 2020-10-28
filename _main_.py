@@ -17,6 +17,7 @@ import math
 import numpy as np
 import matplotlib as mpl 
 import matplotlib.pyplot as plt
+from heapq import nlargest 
 from bs4 import BeautifulSoup
 from lxml import etree
 from whoosh import index
@@ -451,6 +452,30 @@ def cosine_scoring(searcher, fieldnum, text, docnum, weight, QTF=1):
     QTW = ((0.5 + (0.5 * QTF/ QMF))) * idf
     return DTW * QTW
 
+
+# -------------------------------------------------------------------------------------------------
+# reciprocal_rank_fusion - Auxiliary function to calculate the RRF for the top-p documents
+# Uses the formula RBF_score(f) = sum (1 / (50 + rank_f))
+# -------------------------------------------------------------------------------------------------
+def reciprocal_rank_fusion(p, ranking_lists):
+    document_ranks = {}
+
+    for rank_l in ranking_lists:
+        for i in range(len(rank_l )):
+            if rank_l[i][0] not in document_ranks:
+                document_ranks[rank_l[i][0]] = 0
+            document_ranks[rank_l[i][0]] += 1 / (50 + i+1)
+
+    p_highest = nlargest(p, document_ranks, key=document_ranks.get)
+    
+    results = []
+
+    for p in p_highest:
+        results += [[p, document_ranks[p]]]  
+
+    return results
+
+
 # ------------------------------------------------------------------------------------------------
 # ranking - Function that will query all documents in index I and rank the top p ones
 #
@@ -458,7 +483,7 @@ def cosine_scoring(searcher, fieldnum, text, docnum, weight, QTF=1):
 #        p - The number of top ranked documents we will return
 #        I - The Index object in which we will perform our search
 #        **kwargs - Optional named arguments to parameterize scoring, with the following functionality (default values prefixed by *)
-#               ranking [cosine | *bm25] - Chooses the scoring model we will use to score our terms
+#               ranking [cosine | RRF | *bm25] - Chooses the scoring model we will use to score our terms
 #               B [float | *0.75] - Free parameter for the BM25 model
 #               content_B [float | *1.0] - Free parameter specific to the content field for the BM25 model
 #               k1 [float | *1.5] - Free parameter for the BM25 model
@@ -486,6 +511,12 @@ def ranking(q, p, I, **kwargs):
 
         weight_vector = scoring.BM25F(B=b, content_B=content_b, K1=k1)  
 
+    elif kwargs['ranking'] == 'RRF':
+        bm25_ranking_1 = ranking(q, p, I, ranking="bm25")
+        bm25_ranking_2 = ranking(q, p, I, ranking="bm25", b=0.5, content_b=1.25, k1=1.25)
+        bm25_ranking_3 = ranking(q, p, I, ranking="bm25", b=0.5, content_b=1.5, k1=1.00)
+
+        return reciprocal_rank_fusion(p, [bm25_ranking_1, bm25_ranking_2, bm25_ranking_3])
 
     with I.searcher(weighting=weight_vector) as searcher:
         parser = QueryParser("content", I.schema, group=OrGroup).parse(topic)
@@ -563,7 +594,7 @@ def evaluate_ranked_query(topic, o_labels, sol_labels):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision'] = precision_score(sol_labels, o_labels, average='macro')
+    results['precision'] = precision_score(sol_labels, o_labels, average='micro')
     results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
     results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
     results['MAP'] = average_precision_score(sol_labels, o_labels)
@@ -579,7 +610,7 @@ def evaluate_boolean_query(topic, o_labels, sol_labels):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision'] = precision_score(sol_labels, o_labels, average='macro')
+    results['precision'] = precision_score(sol_labels, o_labels, average='micro')
     results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
     results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
     results['MAP'] = average_precision_score(sol_labels, o_labels)
@@ -606,7 +637,6 @@ def display_results_per_q(q, results_ranked, results_boolean):
         print("For k={}: {}".format(k, result_str[:-2]))
 
     return
-
 # -------------------------------------------------------------------------------------------------------
 # evaluation - Function that fully evaluates our IR model, providing full statiscal analysis for several
 # p and k values across multiple ranges and topics
@@ -698,8 +728,7 @@ def main():
     #indexing(D_set[0])
     D_set = [None]
 
-    overlapping_terms()
-    #Q_test = [101]
-    #evaluation(Q_test, R_set[0], D_set[0])    
+    Q_test = [101]
+    evaluation(Q_test, R_set[0], D_set[0])
 
 main()
