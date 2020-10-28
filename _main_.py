@@ -15,6 +15,8 @@ import shutil
 import sklearn
 import math
 import numpy as np
+import matplotlib as mpl 
+import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 from lxml import etree
 from whoosh import index
@@ -27,6 +29,7 @@ from nltk import WordNetLemmatizer
 from textblob import TextBlob
 
 topics = {}
+judged_documents = {}
 index_id = 1
 # -----------------------------------------------------------------------
 # getTopics - Auxiliary function that gathers info on all topics
@@ -66,6 +69,7 @@ def getTopics(directory):
 # Output: [R-Test, R-Train], each being a list of triplet entries
 # -------------------------------------------------------------------------------------------------
 def get_R_set(directory):
+    global judged_documents
 
     r_test_f = open('{}qrels_test.txt'.format(directory), 'r')
     r_train_f = open('{}qrels_train.txt'.format(directory), 'r')
@@ -81,6 +85,10 @@ def get_R_set(directory):
             split_entry = line.split(' ')
             topic_id = int(split_entry[0][1:])
             doc_id = int(split_entry[1])
+
+            if doc_id not in judged_documents: 
+                judged_documents[doc_id] = True
+
             feedback = int(split_entry[2])
             
             if topic_id not in r_set[i]:
@@ -100,6 +108,8 @@ def get_R_set(directory):
 # Output: A List with the paths to each file child
 #--------------------------------------------------
 def get_xml_files_recursively(path):
+    global judged_documents
+
     files_list = []
     directory_list = os.listdir(path)
     for f in directory_list:
@@ -107,7 +117,8 @@ def get_xml_files_recursively(path):
         if os.path.isdir(n_path):
             files_list.extend(get_xml_files_recursively(n_path))
         else:
-            files_list.append(re.sub('//','/','{}/{}'.format(path,f)))
+            if int(f.split('news')[0]) in judged_documents:
+                files_list.append(re.sub('//','/','{}/{}'.format(path,f)))
     return files_list
 
 # -------------------------------------------------
@@ -145,6 +156,7 @@ def get_files_from_directory(path):
             parsed_files_train += [parsed_file,]
         else:
             parsed_files_test += [parsed_file,]
+        print("{} Parsed".format(f))
 
     return (parsed_files_test, parsed_files_train)
 
@@ -277,7 +289,7 @@ def indexing(D, **kwargs):
     
     time_required = round(time.time() - start_time, 6)
     
-    index_id += 1
+    #index_id += 1
 
     #TODO: Fixme the size is wrong and wonky
     space_required = os.path.getsize(ind_dir)
@@ -474,12 +486,18 @@ def ranking(q, p, I, **kwargs):
         
         term_list = []
         for i in range(p):
-            term_list += [(results[i].values()[1], results.score(i)), ]
+            term_list += [(int(results[i].values()[1]), results.score(i)), ]
 
     return term_list
 
 # -------------------------------------------------------------------------------------------------
-# Auxiliary function
+# find_R_test_labels - Function that finds the test labels for a given R_Set
+#
+# Input: R_test - The R_Test set 
+#
+# Behaviour: Extrapolates the feedback from the R_Test set to an array
+#
+# Output: The R_Test set labels in np array form
 # -------------------------------------------------------------------------------------------------
 def find_R_test_labels(R_test):
     r_labels = []
@@ -489,9 +507,39 @@ def find_R_test_labels(R_test):
     return np.array(r_labels)
 
 # -------------------------------------------------------------------------------------------------
-# Auxiliary function
+# find_ranked_query_labels - Function that finds the test labels for given query_docs and r_labels
+#
+# Input: query_docs - The ranked query docs
+#        r_labels - the labels R_Test set produced 
+#
+# Behaviour: Compares de R_Test set feedback with the ranked docs
+#
+# Output: The labels for the ranked query docs in np array form
 # -------------------------------------------------------------------------------------------------
-def find_query_labels(query_docs, r_labels):
+def find_ranked_query_labels(query_docs, r_labels):
+    query_labels = []
+    q_docs = np.array(query_docs)
+    q_docs = q_docs[:,0]
+
+    for doc in r_labels:
+        if doc[0] in q_docs:
+            query_labels += [[doc[0], 1], ]
+        else:
+            query_labels += [[doc[0], 0], ]
+
+    return np.array(query_labels) 
+
+# -------------------------------------------------------------------------------------------------
+# find_boolean_query_labels - Function that finds the test labels for given query_docs and r_labels
+#
+# Input: query_docs - The query docs
+#        r_labels - the labels R_Test set produced 
+#
+# Behaviour: Compares de R_Test set feedback with the ranked docs
+#
+# Output: The labels for the query docs in np array form
+# -------------------------------------------------------------------------------------------------
+def find_boolean_query_labels(query_docs, r_labels):
     query_labels = []
     for doc in r_labels:
         if doc[0] in query_docs:
@@ -502,13 +550,53 @@ def find_query_labels(query_docs, r_labels):
     return np.array(query_labels)    
 
 # -------------------------------------------------------------------------------------------------
-# Evaluate
+# evaluate_ranked_query
 # -------------------------------------------------------------------------------------------------
-def evaluate(topic, o_labels, sol_labels):
+def evaluate_ranked_query(topic, o_labels, sol_labels):
+    results = {}
 
-    print("Accuracy of {}: {}".format(topic, accuracy_score(sol_labels, o_labels)))
-    print("Micro Precision of {}: {}".format(topic, precision_score(sol_labels, o_labels, average='micro')))
-    print("Micro F1-score of  {}: {}".format(topic, recall_score(sol_labels, o_labels, average='micro')))
+    results['accuracy'] = accuracy_score(sol_labels, o_labels)
+    results['precision'] = precision_score(sol_labels, o_labels, average='macro')
+    results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
+    results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+    results['MAP'] = average_precision_score(sol_labels, o_labels)
+    #insert BPREF here
+    #print("Discounted Cumulative Gain of {}: {}".format(topic, ndcg_score(sol_labels, o_labels)))
+
+    return results
+
+# -------------------------------------------------------------------------------------------------
+# evaluate_boolean_query
+# -------------------------------------------------------------------------------------------------
+def evaluate_boolean_query(topic, o_labels, sol_labels):
+    results = {}
+
+    results['accuracy'] = accuracy_score(sol_labels, o_labels)
+    results['precision'] = precision_score(sol_labels, o_labels, average='macro')
+    results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
+    results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+    results['MAP'] = average_precision_score(sol_labels, o_labels)
+
+    return results
+
+# -------------------------------------------------------------------------------------------------
+# display_results
+# -------------------------------------------------------------------------------------------------
+def display_results_per_q(q, results_ranked, results_boolean):
+    print("Result for search on Topic {}".format(q))
+    print("\nRanked Search:")
+    for p in results_ranked:
+        result_str= ''
+        for m in results_ranked[p]:
+            result_str += '{} = {}, '.format(m, round(results_ranked[p][m],4)) 
+        print("For p={}: {}".format(p, result_str[:-2]))
+
+    print("\nBoolean Search:")
+    for k in results_boolean:
+        result_str= ''
+        for m in results_boolean[k]:
+            result_str += '{} = {}, '.format(m, round(results_boolean[k][m],4)) 
+        print("For k={}: {}".format(k, result_str[:-2]))
 
     return
 
@@ -525,20 +613,59 @@ def evaluate(topic, o_labels, sol_labels):
 # curves at difierent output sizes, MAP, BPREF analysis, cumulative gains and eficiency
 # -------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
-    I = indexing(D_test)[0]
+    #I = indexing(D_test, **kwargs)[0]
+    I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
 
-    results = {}
+    results_ranked = {}
+    results_boolean = {}
     k_range = [1,2,4,6,8,10]
+    p_range = [1000]
 
     for q in Q_test:
         r_labels = find_R_test_labels(R_test[q])
 
-        for k in k_range:
-            boolean_docs = boolean_query(q, k, I)
-            query_labels = find_query_labels(boolean_docs, r_labels)
+        for p in p_range:
+            score_docs = ranking(q, p, I, **kwargs)
+            ranked_labels = find_ranked_query_labels(score_docs, r_labels)
 
-            evaluate(q, query_labels[:, 1], r_labels[:, 1])
+            results_ranked[p] = evaluate_ranked_query(q, ranked_labels[:, 1], r_labels[:, 1])
+
+        for k in k_range:
+            boolean_docs = boolean_query(q, k, I, **kwargs)
+            query_labels = find_boolean_query_labels(boolean_docs, r_labels)
+
+            results_boolean[k] = evaluate_boolean_query(q, query_labels[:, 1], r_labels[:, 1])
+            
+        display_results_per_q(q, results_boolean, results_boolean)
+        
     return
+
+# --------------------------------------------------------------------------------
+# a)
+# --------------------------------------------------------------------------------
+def overlapping_terms():
+    I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
+    k_range = [2,3,5,7,10,15]
+
+    for k in k_range:
+        top_terms = {}
+        for q in range(101,201,1):
+            results = extract_topic_query(q, I, k)
+            for r in results:
+                if r not in top_terms:
+                    top_terms[r] = 0
+                top_terms[r] += 1
+
+        r_terms = 0
+        for term in top_terms:
+            if top_terms[term] > 1:
+                r_terms += 1
+        print("\nNumber of overlapping terms: {}".format(r_terms))
+        print("Percent of overlapping terms: {}%".format(round(r_terms/len(top_terms)*100,3)))
+        print(top_terms)
+    return
+
+
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
@@ -549,12 +676,12 @@ def main():
     R_set = get_R_set(material_dic)
     getTopics(material_dic)
 
-    D_set = get_files_from_directory('../rcv1_test/19961001')    #test
-    I = indexing(D_set[0])
-    #extract_topic_query(101, I[0], 5, scoring='bm25')
-    #print(ranking(101, 5, I[0], scoring='cosine'))
+    #D_set = get_files_from_directory('../rcv1/')    #test
+    #indexing(D_set[0])
+    D_set = [None]
 
-    Q_test = [101]
-    evaluation(Q_test, R_set[0], D_set[0])    
+    overlapping_terms()
+    #Q_test = [101]
+    #evaluation(Q_test, R_set[0], D_set[0])    
 
 main()
