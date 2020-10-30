@@ -157,7 +157,6 @@ def get_files_from_directory(path):
             parsed_files_train += [parsed_file,]
         else:
             parsed_files_test += [parsed_file,]
-        print("{} Parsed".format(f))
 
     return (parsed_files_test, parsed_files_train)
 
@@ -290,9 +289,6 @@ def indexing(D, **kwargs):
     
     time_required = round(time.time() - start_time, 6)
     
-    #index_id += 1
-
-    #TODO: Fixme the size is wrong and wonky
     space_required = os.path.getsize(ind_dir)
 
     return (ind, time_required, space_required)
@@ -636,8 +632,8 @@ def evaluate_ranked_query(topic, o_labels, sol_labels, **kwargs):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro')
-    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro')
+    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro', zero_division=1)
+    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro', zero_division=1)
     results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
     results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
     results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
@@ -660,8 +656,8 @@ def evaluate_boolean_query(topic, o_labels, sol_labels, **kwargs):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro')
-    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro')
+    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro', zero_division=1)
+    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro', zero_division=1)
     results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
     results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
     results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
@@ -719,8 +715,10 @@ def display_results_per_q(q, results_ranked, results_boolean):
 # Output: Full statistical analysis for the provided input args
 # -----------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
-    I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
-    #I = indexing(D_test, **kwargs)[0]
+    # Standard index execution
+    #I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
+
+    I = indexing(D_test, **kwargs)[0]
 
     results_ranked = {}
     results_boolean = {}
@@ -761,7 +759,9 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 # Output: Data about the overlaping terms
 # --------------------------------------------------------------------------------------------
 def overlapping_terms():
+    # Standard index execution
     I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
+
     k_range = [2,3,5,7,10,15]
 
     for k in k_range:
@@ -789,15 +789,5 @@ def overlapping_terms():
 # --------------------------------------------------------------------------------
 def main():
     material_dic = 'material/'
-
-    R_set = get_R_set(material_dic)
-    getTopics(material_dic)
-
-    #D_set = get_files_from_directory('../rcv1/')    #test
-    #indexing(D_set[0])
-    D_set = [None]
-
-    Q_test = [101]
-    evaluation(Q_test, R_set[0], D_set[0], curves=False)
 
 main()
