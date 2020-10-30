@@ -483,7 +483,7 @@ def reciprocal_rank_fusion(p, ranking_lists):
 #        p - The number of top ranked documents we will return
 #        I - The Index object in which we will perform our search
 #        **kwargs - Optional named arguments to parameterize scoring, with the following functionality (default values prefixed by *)
-#               ranking [cosine | RRF | *bm25] - Chooses the scoring model we will use to score our terms
+#               ranking [cosine | RRF | tf-idf | *bm25] - Chooses the scoring model we will use to score our terms
 #               B [float | *0.75] - Free parameter for the BM25 model
 #               content_B [float | *1.0] - Free parameter specific to the content field for the BM25 model
 #               k1 [float | *1.5] - Free parameter for the BM25 model
@@ -504,6 +504,9 @@ def ranking(q, p, I, **kwargs):
     elif kwargs['ranking'] == 'cosine':
         weight_vector = scoring.FunctionWeighting(cosine_scoring)
 
+    elif kwargs['ranking'] == 'tf-idf':
+        weight_vector = scoring.TF_IDF()
+
     elif kwargs['ranking'] == 'bm25':
         b = 0.75 if 'B' not in kwargs else kwargs['B']
         content_b = 1.0 if 'content_B' not in kwargs else kwargs['content_B']
@@ -523,8 +526,14 @@ def ranking(q, p, I, **kwargs):
         results = searcher.search(parser, limit=p)
         
         term_list = []
-        for i in range(p):
-            term_list += [(int(results[i].values()[1]), results.score(i)), ]
+
+        if p != None:
+            for i in range(p):
+                if i < len(results):
+                    term_list += [(int(results[i].values()[1]), results.score(i)), ]
+        else:
+            for i in range(len(results)):
+                term_list += [(int(results[i].values()[1]), results.score(i)), ]
 
     return term_list
 
@@ -538,11 +547,11 @@ def ranking(q, p, I, **kwargs):
 # Output: The R_Test set labels in np array form
 # -------------------------------------------------------------------------------------------------
 def find_R_test_labels(R_test):
-    r_labels = []
+    r_labels = {}
     for doc in R_test:
-        r_labels += [[doc, R_test[doc]], ]
+        r_labels[doc] = R_test[doc]
 
-    return np.array(r_labels)
+    return r_labels
 
 # -------------------------------------------------------------------------------------------------
 # find_ranked_query_labels - Function that finds the test labels for given query_docs and r_labels
@@ -555,17 +564,24 @@ def find_R_test_labels(R_test):
 # Output: The labels for the ranked query docs in np array form
 # -------------------------------------------------------------------------------------------------
 def find_ranked_query_labels(query_docs, r_labels):
-    query_labels = []
     q_docs = np.array(query_docs)
     q_docs = q_docs[:,0]
 
-    for doc in r_labels:
-        if doc[0] in q_docs:
-            query_labels += [[doc[0], 1], ]
-        else:
-            query_labels += [[doc[0], 0], ]
+    query_labels = []
+    result_labels = []
 
-    return np.array(query_labels) 
+    for doc in query_docs:
+        if doc[0] in r_labels:
+            query_labels += [[doc[0], 1], ]
+            result_labels += [[doc[0], r_labels[doc[0]]], ]
+    
+    for doc in r_labels:
+        if doc not in q_docs:
+            query_labels += [[doc, 0], ]
+            result_labels += [[doc, r_labels[doc]], ]
+    
+
+    return [np.array(query_labels), np.array(result_labels)]  
 
 # -------------------------------------------------------------------------------------------------
 # find_boolean_query_labels - Function that finds the test labels for given query_docs and r_labels
@@ -573,47 +589,92 @@ def find_ranked_query_labels(query_docs, r_labels):
 # Input: query_docs - The query docs
 #        r_labels - the labels R_Test set produced 
 #
-# Behaviour: Compares de R_Test set feedback with the ranked docs
+# Behaviour: Compares the R_Test set feedback with the ranked docs
 #
 # Output: The labels for the query docs in np array form
 # -------------------------------------------------------------------------------------------------
 def find_boolean_query_labels(query_docs, r_labels):
     query_labels = []
-    for doc in r_labels:
-        if doc[0] in query_docs:
-            query_labels += [[doc[0], 1], ]
-        else:
-            query_labels += [[doc[0], 0], ]
+    result_labels = []
 
-    return np.array(query_labels)    
+    for doc in r_labels:
+        if doc in query_docs:
+            query_labels += [[doc, 1], ]
+            result_labels += [[doc, r_labels[doc]]]
+        else:
+            query_labels += [[doc, 0], ]
+            result_labels += [[doc, r_labels[doc]]]
+
+    return [np.array(query_labels), np.array(result_labels)]   
+
+# -------------------------------------------------------------------------------------------------
+# bpref - Function that runs the bpref evaluation metric
+# -------------------------------------------------------------------------------------------------
+def bpref(sol_labels):
+    R = 0
+    N = 0
+    bpref = 0
+    n_count = 0
+    for label in sol_labels:
+        if label == 0:
+            N += 1
+        else:
+            R += 1
+
+    for label in sol_labels:
+        if label == 0:
+            n_count += 1
+        else:
+            bpref += (1 - n_count/(min(R,N)))
+
+    return (1 / R) * bpref
 
 # -------------------------------------------------------------------------------------------------
 # evaluate_ranked_query - Auxiliary function to calculate statistical data
 # -------------------------------------------------------------------------------------------------
-def evaluate_ranked_query(topic, o_labels, sol_labels):
+def evaluate_ranked_query(topic, o_labels, sol_labels, **kwargs):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision'] = precision_score(sol_labels, o_labels, average='micro')
-    results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
-    results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro')
+    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro')
+    results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
+    results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
+    results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
+    results['f-beta-macro'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
     results['MAP'] = average_precision_score(sol_labels, o_labels)
-    #insert BPREF here
-    #print("Discounted Cumulative Gain of {}: {}".format(topic, ndcg_score(sol_labels, o_labels)))
+    results['BPREF'] = bpref(sol_labels)
+
+    if 'curves' in kwargs and kwargs['curves']:
+        precision, recall, _ = precision_recall_curve(sol_labels, o_labels)
+        PrecisionRecallDisplay(precision=precision, recall=recall).plot()
+        plt.title('Precision Recall curve for Ranked topic {}'.format(topic))
+        plt.show()
 
     return results
 
 # -------------------------------------------------------------------------------------------------
 # evaluate_boolean_query - Auxiliary function to calculate statistical data
 # -------------------------------------------------------------------------------------------------
-def evaluate_boolean_query(topic, o_labels, sol_labels):
+def evaluate_boolean_query(topic, o_labels, sol_labels, **kwargs):
     results = {}
 
     results['accuracy'] = accuracy_score(sol_labels, o_labels)
-    results['precision'] = precision_score(sol_labels, o_labels, average='micro')
-    results['recall'] =  recall_score(sol_labels, o_labels, average='macro')
-    results['f-beta'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro')
+    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro')
+    results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
+    results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
+    results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
+    results['f-beta-macro'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
     results['MAP'] = average_precision_score(sol_labels, o_labels)
+
+    
+    if 'curves' in kwargs and kwargs['curves']:
+        precision, recall, _ = precision_recall_curve(sol_labels, o_labels)
+        PrecisionRecallDisplay(precision=precision, recall=recall).plot()
+        plt.title('Precision Recall curve for Boolean topic {}'.format(topic))
+        plt.show()
+
 
     return results
 
@@ -644,8 +705,11 @@ def display_results_per_q(q, results_ranked, results_boolean):
 # Input: Q_test - The set of topics we will evaluate the perform of our IR model on
 #        R_test - The number of top ranked documents we will return
 #        D_test - The Index object in which we will perform our search
-#        **kwargs - The additional args in this function refer to the additional args in indexing(),
-#        ranking() and boolean_query(), for which documentation is provided above.
+#        **kwargs - The additional args in this function also refer to the additional args in indexing(),
+#        ranking() and boolean_query(), for which documentation is provided above. Other than that, we have:
+#               k_range [list of ints | *[1,2,4,6,8,10]] - List of k values our model will test
+#               p_range [list of ints or None | *[100,200,300,400,500]] - List of p values our model will test
+#               curves [True | *False] - Display the precision/recall curves
 #
 # Behaviour: The function provides full statistics for every topic in Q_test, using R_test and D_test
 # to build an index. Then, for each p in p_range it will use ranking() to rank the top p documents
@@ -655,13 +719,18 @@ def display_results_per_q(q, results_ranked, results_boolean):
 # Output: Full statistical analysis for the provided input args
 # -----------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
-    #I = indexing(D_test, **kwargs)[0]
     I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
+    #I = indexing(D_test, **kwargs)[0]
 
     results_ranked = {}
     results_boolean = {}
     k_range = [1,2,4,6,8,10]
-    p_range = [1000]
+    p_range = [100,200,300,400,500, None]
+
+    if 'k_range' in kwargs:
+        k_range = kwargs['k_range']
+    if 'p_range' in kwargs:
+        p_range = kwargs['p_range']
 
     for q in Q_test:
         r_labels = find_R_test_labels(R_test[q])
@@ -670,15 +739,15 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
             score_docs = ranking(q, p, I, **kwargs)
             ranked_labels = find_ranked_query_labels(score_docs, r_labels)
 
-            results_ranked[p] = evaluate_ranked_query(q, ranked_labels[:, 1], r_labels[:, 1])
+            results_ranked[p] = evaluate_ranked_query(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
 
         for k in k_range:
             boolean_docs = boolean_query(q, k, I, **kwargs)
             query_labels = find_boolean_query_labels(boolean_docs, r_labels)
 
-            results_boolean[k] = evaluate_boolean_query(q, query_labels[:, 1], r_labels[:, 1])
+            results_boolean[k] = evaluate_boolean_query(q, query_labels[0][:, 1], query_labels[1][:, 1], **kwargs)
             
-        display_results_per_q(q, results_boolean, results_boolean)
+        display_results_per_q(q, results_ranked, results_boolean)
         
     return
 
@@ -729,6 +798,6 @@ def main():
     D_set = [None]
 
     Q_test = [101]
-    evaluation(Q_test, R_set[0], D_set[0])
+    evaluation(Q_test, R_set[0], D_set[0], curves=False)
 
 main()
