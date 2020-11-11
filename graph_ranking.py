@@ -46,9 +46,9 @@ from proj_utilities import *
 #
 # Output: 
 # -----------------------------------------------------------------------------
-def cosine_similarity_list(doc, doc_dic, theta, **kwargs):
-    result = []
-    doc_keys = doc_dic.keys()
+def cosine_similarity_list(doc_query, doc_dic, theta, **kwargs):
+    result = {}
+    doc_keys = list(doc_dic.keys())
     doc_list = []
 
     for doc in doc_keys:
@@ -56,12 +56,16 @@ def cosine_similarity_list(doc, doc_dic, theta, **kwargs):
 
     # TODO: **kwargs for norm, min_df and max_df
     vec = TfidfVectorizer()
-    doc_list_vectors = vec.fit_transform(doc_list)
-    print(doc_list_vectors)
-    doc_vector = vec.transform([doc])
+    vec.fit(doc_list)
 
-    similarity_list = cosine_similarity(doc_vector, doc_list_vectors)
-    print(similarity_list)
+    doc_list_vectors = vec.transform(doc_list)
+    doc_vector = vec.transform([doc_query])
+
+    similarity_list = cosine_similarity(doc_vector, doc_list_vectors)[0]
+    
+    for i in range(len(similarity_list)):
+        if similarity_list[i] >= theta:
+            result[int(doc_keys[i])] = similarity_list[i]
 
     return result
 
@@ -82,19 +86,22 @@ def cosine_similarity_list(doc, doc_dic, theta, **kwargs):
 def build_graph(D, sim, theta, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
     doc_dic = read_dic_from_file('test_dic')
-    print(doc_dic.keys())
 
-    '''
     graph = {}
-    for doc in doc_list:
+    for doc in doc_dic:
         graph[int(doc)] = {}
 
     if sim == None or sim == 'cosine':
-        #for doc in doc_list:
-        similarity_list = cosine_similarity_list(doc_list['4929'], doc_list, theta, **kwargs)
-    '''
+        for doc in doc_dic:
+            doc_id = int(doc)
+            similarity_dic = cosine_similarity_list(doc_dic[doc], doc_dic, theta, **kwargs)
 
-    return
+            for simil_doc in similarity_dic:
+                if doc_id != simil_doc:
+                    graph[doc_id][simil_doc] = similarity_dic[simil_doc]
+                    graph[simil_doc][doc_id] = similarity_dic[simil_doc]
+
+    return graph
 
 # -----------------------------------------------------------------------
 # undirected_page_rank - 
@@ -112,7 +119,7 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    build_graph(None, 'cosine', 0.3)
+    print(build_graph(None, 'cosine', 0.3))
     return
 
 
