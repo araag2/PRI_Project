@@ -29,20 +29,34 @@ from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
 from textblob import TextBlob
 
-# -----------------------------------------------------------------------
-# build_graph - 
+# File imports
+from _main_ import get_files_from_directory
+from _main_ import process_collection
+
+# --------------------------------------------------------------------------
+# build_graph - Builds a document graph from document collection D using
+# the similarity measure in sim agains theta threshold
 #
-# Input: 
-# 
+# Input: D - The document collection to build our graph with
+#        sim - The similarity measure used
+#        theta - The similarity threshold 
+#        kwargs -
+#
 # Behaviour: 
 #
-# Output:
-# -----------------------------------------------------------------------
-def build_graph(D, sim, theta, args):
+# Output: A dictionary representing the weighted undirect graph that
+# connect all documents on the basis of the given similarity measure
+# -----------------------------------------------------------------------------
+def build_graph(D, sim, theta, **kwargs):
+    doc_list = process_collection(D, **kwargs)
+
+    graph = {}
+    #for doc in doc_list:
+
     return
 
 # -----------------------------------------------------------------------
-# build_graph - 
+# undirected_page_rank - 
 #
 # Input: 
 # 
@@ -50,14 +64,15 @@ def build_graph(D, sim, theta, args):
 #
 # Output:
 # -----------------------------------------------------------------------
-def undirected_page_rank(q, D, p, sim, theta, args):
+def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     return
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    
+    D_set = get_files_from_directory('../rcv1/19960820')
+    build_graph(D_set[1])
     return
 
 

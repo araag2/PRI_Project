@@ -239,6 +239,18 @@ def processing(text, **kwargs):
     # Removing the first whitespace in the output 
     return string_tokens[1:]
 
+def process_collection(collection, **kwargs):
+    result = {}
+    for doc in collection:
+        item_id = doc.newsitem.get('itemid')
+        title = processing(re.sub('<[^<]+>', "", str(doc.title)), **kwargs)
+        dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)), **kwargs)
+        text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1], **kwargs)
+        
+        result[item_id] = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
+
+    return result
+
 # --------------------------------------------------------------------------------
 # indexing - Creates an index after processing all text on data set D
 #
@@ -279,14 +291,10 @@ def indexing(D, **kwargs):
         print("Error creating index")
         return
 
-    for doc in D:
-        item_id = doc.newsitem.get('itemid')
-        title = processing(re.sub('<[^<]+>', "", str(doc.title)), **kwargs)
-        dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)), **kwargs)
-        text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1], **kwargs)
-        
-        result = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
-        ind_writer.add_document(id=item_id, content=result)
+    processed_docs = process_collection(D, **kwargs)
+
+    for doc in processed_docs:
+        ind_writer.add_document(id=doc, content=processed_docs[doc])
 
     ind_writer.commit()
     
@@ -796,11 +804,12 @@ def overlapping_terms():
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    material_dic = 'material/'
+    #material_dic = 'material/'
 
-    R_set = get_R_set(material_dic)
-    getTopics(material_dic)
+    #R_set = get_R_set(material_dic)
+    #getTopics(material_dic)
 
-    evaluation([120], R_set[0], [None], ranking='RRF')
+    #evaluation([120], R_set[0], [None], ranking='RRF')
+    return
 
-main()
+#main()
