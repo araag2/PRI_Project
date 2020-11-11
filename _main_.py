@@ -239,7 +239,7 @@ def processing(text, **kwargs):
     # Removing the first whitespace in the output 
     return string_tokens[1:]
 
-def process_collection(collection, **kwargs):
+def process_collection(collection, tokenize, **kwargs):
     result = {}
     for doc in collection:
         item_id = doc.newsitem.get('itemid')
@@ -247,7 +247,10 @@ def process_collection(collection, **kwargs):
         dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)), **kwargs)
         text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1], **kwargs)
         
-        result[item_id] = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
+        if tokenize:
+            result[item_id] = nltk.word_tokenize('{} {} {}'.format(title, dateline, text))
+        else:
+            result[item_id] = '{}\n{}\n{}'.format(title, dateline, text)
 
     return result
 
@@ -291,10 +294,10 @@ def indexing(D, **kwargs):
         print("Error creating index")
         return
 
-    processed_docs = process_collection(D, **kwargs)
+    processed_docs = process_collection(D, True, **kwargs)
 
     for doc in processed_docs:
-        ind_writer.add_document(id=doc, content=processed_docs[doc])
+        ind_writer.add_document(id=int(doc), content=processed_docs[doc])
 
     ind_writer.commit()
     

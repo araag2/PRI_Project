@@ -27,11 +27,43 @@ from whoosh.fields import *
 from sklearn.metrics import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from textblob import TextBlob
 
 # File imports
 from _main_ import get_files_from_directory
 from _main_ import process_collection
+from proj_utilities import *
+
+# --------------------------------------------------------------------------
+# cosine_similarity_list - Computes the cosine similarity between a document
+# and a given list of documents
+#
+# Input: 
+#
+# Behaviour: 
+#
+# Output: 
+# -----------------------------------------------------------------------------
+def cosine_similarity_list(doc, doc_dic, theta, **kwargs):
+    result = []
+    doc_keys = doc_dic.keys()
+    doc_list = []
+
+    for doc in doc_keys:
+        doc_list += [doc_dic[doc], ]
+
+    # TODO: **kwargs for norm, min_df and max_df
+    vec = TfidfVectorizer()
+    doc_list_vectors = vec.fit_transform(doc_list)
+    print(doc_list_vectors)
+    doc_vector = vec.transform([doc])
+
+    similarity_list = cosine_similarity(doc_vector, doc_list_vectors)
+    print(similarity_list)
+
+    return result
 
 # --------------------------------------------------------------------------
 # build_graph - Builds a document graph from document collection D using
@@ -48,10 +80,19 @@ from _main_ import process_collection
 # connect all documents on the basis of the given similarity measure
 # -----------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
-    doc_list = process_collection(D, **kwargs)
+    #doc_dic = process_collection(D, False, **kwargs)
+    doc_dic = read_dic_from_file('test_dic')
+    print(doc_dic.keys())
 
+    '''
     graph = {}
-    #for doc in doc_list:
+    for doc in doc_list:
+        graph[int(doc)] = {}
+
+    if sim == None or sim == 'cosine':
+        #for doc in doc_list:
+        similarity_list = cosine_similarity_list(doc_list['4929'], doc_list, theta, **kwargs)
+    '''
 
     return
 
@@ -71,8 +112,7 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    D_set = get_files_from_directory('../rcv1/19960820')
-    build_graph(D_set[1])
+    build_graph(None, 'cosine', 0.3)
     return
 
 
