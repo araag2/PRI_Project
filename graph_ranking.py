@@ -200,6 +200,31 @@ def build_graph(D, sim, theta, **kwargs):
     return graph
 
 # -----------------------------------------------------------------------
+# page_rank - 
+#
+# Input: 
+# 
+# Behaviour: 
+#
+# Output:
+# -----------------------------------------------------------------------
+def page_rank(result_graph, link_graph, damping, max_iters, **kwargs):
+    for _ in range(max_iters):
+        iter_graph = {}
+
+        for doc in result_graph:
+            cumulative_prob = 0
+            link_n = len(result_graph[doc])
+
+            for link in result_graph[doc]:
+                cumulative_prob += result_graph[link] / link_n 
+            iter_graph[doc] = cumulative_prob
+
+        result_graph = iter_graph
+
+    return result_graph
+
+# -----------------------------------------------------------------------
 # undirected_page_rank - 
 #
 # Input: 
@@ -209,13 +234,28 @@ def build_graph(D, sim, theta, **kwargs):
 # Output:
 # -----------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
+    result_graph = {}
+    link_graph = build_graph(D, sim, theta, **kwargs) 
+
+    uniform_residue = 0.15
+    damping = 1 - uniform_residue
+    for doc in link_graph:
+        result_graph[doc] = uniform_residue
+
+    max_iters = 50
+    if 'iter' in kwargs:
+        max_iters = kwargs['iter']
+
+    result_graph = page_rank(result_graph, link_graph, damping, max_iters, **kwargs)
+    print(result_graph)
+
     return
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    print(build_graph(None, 'euclidean', 0.3))
+    print(build_graph(None, 'cosine', 0.3))
     return
 
 
