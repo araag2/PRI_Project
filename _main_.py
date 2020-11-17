@@ -101,6 +101,14 @@ def get_R_set(directory):
 
     return r_set
 
+# -----------------------------------------------------------------------------
+# get_judged_docs - Small auxiliary function that returns the judged documents
+# in the given rcv1 directory
+# -----------------------------------------------------------------------------
+def get_judged_docs(material_dir, rcv1_dir):
+    get_R_set(material_dir)
+    return get_files_from_directory(rcv1_dir, judged=True)
+
 #--------------------------------------------------
 # get_xml_files_recursively - Auxiliary function to get_files_from_directory
 #
@@ -242,10 +250,15 @@ def processing(text, **kwargs):
     # Removing the first whitespace in the output 
     return string_tokens[1:]
 
+# -----------------------------------------------------------------------------
+# process_collection - Small auxiliary function to externaly process a text 
+# collection independently of program function
+# -----------------------------------------------------------------------------
+
 def process_collection(collection, tokenize, **kwargs):
     result = {}
     for doc in collection:
-        item_id = doc.newsitem.get('itemid')
+        item_id = int(doc.newsitem.get('itemid'))
         title = processing(re.sub('<[^<]+>', "", str(doc.title)), **kwargs)
         dateline = processing(re.sub('<[^<]+>|\w[0-9]+-[0-9]+-[0-9]+\w', "", str(doc.dateline)), **kwargs)
         text = processing(re.sub('<[^<]+>', "", str(doc.find_all('text')))[1:-1], **kwargs)
@@ -803,8 +816,6 @@ def overlapping_terms():
         print("Percent of overlapping terms: {}%".format(round(r_terms/len(top_terms)*100,3)))
         print(top_terms)
     return
-
-
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~

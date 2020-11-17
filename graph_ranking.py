@@ -36,6 +36,7 @@ from textblob import TextBlob
 # File imports
 from _main_ import get_files_from_directory
 from _main_ import process_collection
+from _main_ import get_judged_docs
 from proj_utilities import *
 
 #Global variables
@@ -167,7 +168,7 @@ def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
 def sim_method_helper(sim):
     sim_methods = {'cosine': cosine_similarity_dic, 'euclidean': eucledian_distance_dic, 'manhattan': manhattan_distance_dic}
     sim_method = None
-
+    
     if sim == None:
         sim_method = sim_methods['cosine']
 
@@ -196,16 +197,16 @@ def sim_method_helper(sim):
 # ------------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
-    doc_dic = read_from_file('test_dic')
+    doc_dic = read_from_file('judged_docs_processed')
 
     graph = {}
     for doc in doc_dic:
-        graph[int(doc)] = {}
+        graph[doc] = {}
 
     sim_method = sim_method_helper(sim)
 
     for doc in doc_dic:
-        doc_id = int(doc)
+        doc_id = doc
         similarity_dic = sim_method(doc_dic[doc], doc_dic, theta, **kwargs)
 
         for simil_doc in similarity_dic:
@@ -213,6 +214,7 @@ def build_graph(D, sim, theta, **kwargs):
                 graph[doc_id][simil_doc] = similarity_dic[simil_doc]
                 graph[simil_doc][doc_id] = similarity_dic[simil_doc]
 
+    write_to_file(graph, 'judged_docs_linked_graph')
     return graph
 
 # -----------------------------------------------------------------------
@@ -224,22 +226,28 @@ def build_graph(D, sim, theta, **kwargs):
 #
 # Output:
 # -----------------------------------------------------------------------
-def page_rank(init_graph, link_graph, p, max_iters, **kwargs):
-    
+def page_rank(link_graph, **kwargs):
+    init_graph = {}
+
+    max_iters = 50 if 'iter' not in kwargs else kwargs['iter']
+    p = 0.15 if 'p' not in kwargs else kwargs['p']
     N = len(link_graph)
     damping = 1 - p
-    prior = p / N
-    if 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
-        prior = None
-
-    # Dictionary to save max_iters * (N-1) len() operations
-    link_count = {}
-    for doc in link_graph:
-        link_count[doc] = len(link_graph[doc])
-
-    result_graph = init_graph
+    prior = None
 
     if 'prior' not in kwargs:
+        prior = p / N
+
+        for doc in link_graph:
+            init_graph[doc] = prior
+
+        result_graph = init_graph
+
+        # Dictionary to save max_iters * (N-1) len() operations
+        link_count = {}
+        for doc in link_graph:
+            link_count[doc] = len(link_graph[doc])
+
         for _ in range(max_iters):
             iter_graph = {}
 
@@ -253,7 +261,27 @@ def page_rank(init_graph, link_graph, p, max_iters, **kwargs):
             result_graph = iter_graph
 
     #TODO: 
-    #elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
+    elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
+
+
+        # Dictionary to save max_iters * (N-1) cum_sum operations
+        link_weighted_count = {}
+        for doc in link_graph:
+            link_weighted_count[doc] = 0
+            for link in link_graph[doc]:
+                link_weighted_count[doc] += link_graph[doc][link]
+
+        for _ in range(max_iters):
+            iter_graph = {}
+
+            for doc in result_graph:
+                cumulative_prob = 0
+
+                for link in link_graph[doc]:
+                    cumulative_prob += ((result_graph[link] * link_graph[link][doc]) / link_weighted_count[doc]) 
+                iter_graph[doc] = prior + damping * cumulative_prob 
+
+            result_graph = iter_graph
 
     return result_graph
 
@@ -269,26 +297,16 @@ def page_rank(init_graph, link_graph, p, max_iters, **kwargs):
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     init_graph = {}
     #link_graph = build_graph(D, sim, theta, **kwargs)
+
+    #TODO: Remove this
     link_graph = read_from_file('link_graph')
+    ranked_graph = page_rank(link_graph, **kwargs)
 
-    prob = 0.15
-    for doc in link_graph:
-        init_graph[doc] = prob / len(link_graph)
-
-    max_iters = 50
-    if 'iter' in kwargs:
-        max_iters = kwargs['iter']
-
-    ranked_graph = page_rank(init_graph, link_graph, prob, max_iters, **kwargs)
-
-    #TODO: Define alpha to weight page ranking with other things.
     query = topics[q]
     sim_method = sim_method_helper(sim)
     sim_dic = sim_method(query, read_from_file('test_dic'), theta, **kwargs)
 
-    sim_weight = 0.5
-    if 'sim_weight' in kwargs:
-        sim_weight = kwargs['sim_weight']
+    sim_weight = 0.15 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
 
     # Rebalances similarity based on page rank
@@ -313,9 +331,14 @@ def main():
     global topics 
     topics = read_from_file('topics_processed')
 
-    #print(build_graph(None, 'cosine', 0.3))
+    #D_judged = read_from_file('judged_docs_processed')
+    build_graph(None, 'cosine', 0.3)
+    
+    #undirected_page_rank(140, None, 5, 'cosine', 0.3)
 
-    undirected_page_rank(143, None, 5, 'cosine', 0.3)
+    
+
+    
     return
 
 
