@@ -38,6 +38,8 @@ from _main_ import get_files_from_directory
 from _main_ import process_collection
 from proj_utilities import *
 
+#Global variables
+topics = {}
 # -----------------------------------------------------------------------------------------
 # tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
 # and transforms our query doc and the entire collection into tf-idf spaced vectors 
@@ -153,6 +155,32 @@ def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
     return result
 
 # ------------------------------------------------------------------------------
+# sim_method_helper - Short helper method to encapsulate choosing the correct
+# similarity function
+#
+# Input: sim - The string which represents which similarity function to use
+#
+# Behaviour: Matches the string with a dictionary of functions we have available
+#
+# Output: The function to use
+# ------------------------------------------------------------------------------
+def sim_method_helper(sim):
+    sim_methods = {'cosine': cosine_similarity_dic, 'euclidean': eucledian_distance_dic, 'manhattan': manhattan_distance_dic}
+    sim_method = None
+
+    if sim == None:
+        sim_method = sim_methods['cosine']
+
+    elif sim == 'cosine' or sim == 'euclidean' or sim == 'manhattan':
+        sim_method = sim_methods[sim]
+    
+    else:
+        print("Error: similarity measure not recognized.")
+
+    return sim_method
+
+
+# ------------------------------------------------------------------------------
 # build_graph - Builds a document graph from document collection D using
 # the similarity measure in sim agains theta threshold
 #
@@ -167,8 +195,6 @@ def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
 # connect all documents on the basis of the given similarity measure
 # ------------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
-    sim_methods = {'cosine': cosine_similarity_dic, 'euclidean': eucledian_distance_dic, 'manhattan': manhattan_distance_dic}
-
     #doc_dic = process_collection(D, False, **kwargs)
     doc_dic = read_from_file('test_dic')
 
@@ -176,17 +202,7 @@ def build_graph(D, sim, theta, **kwargs):
     for doc in doc_dic:
         graph[int(doc)] = {}
 
-    sim_method = None
-
-    if sim == None:
-        sim_method = sim_methods['cosine']
-
-    elif sim == 'cosine' or sim == 'euclidean' or sim == 'manhattan':
-        sim_method = sim_methods[sim]
-    
-    else:
-        print("Error: similarity measure not recognized.")
-        return
+    sim_method = sim_method_helper(sim)
 
     for doc in doc_dic:
         doc_id = int(doc)
@@ -208,19 +224,36 @@ def build_graph(D, sim, theta, **kwargs):
 #
 # Output:
 # -----------------------------------------------------------------------
-def page_rank(result_graph, link_graph, damping, max_iters, **kwargs):
-    for _ in range(max_iters):
-        iter_graph = {}
+def page_rank(init_graph, link_graph, p, max_iters, **kwargs):
+    
+    N = len(link_graph)
+    damping = 1 - p
+    prior = p / N
+    if 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
+        prior = None
 
-        for doc in result_graph:
-            cumulative_prob = 0
-            link_n = len(result_graph[doc])
+    # Dictionary to save max_iters * (N-1) len() operations
+    link_count = {}
+    for doc in link_graph:
+        link_count[doc] = len(link_graph[doc])
 
-            for link in result_graph[doc]:
-                cumulative_prob += result_graph[link] / link_n 
-            iter_graph[doc] = cumulative_prob
+    result_graph = init_graph
 
-        result_graph = iter_graph
+    if 'prior' not in kwargs:
+        for _ in range(max_iters):
+            iter_graph = {}
+
+            for doc in result_graph:
+                cumulative_prob = 0
+
+                for link in link_graph[doc]:
+                    cumulative_prob += (result_graph[link] / link_count[doc]) 
+                iter_graph[doc] = prior + damping * cumulative_prob 
+
+            result_graph = iter_graph
+
+    #TODO: 
+    #elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
 
     return result_graph
 
@@ -234,28 +267,55 @@ def page_rank(result_graph, link_graph, damping, max_iters, **kwargs):
 # Output:
 # -----------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
-    result_graph = {}
-    link_graph = build_graph(D, sim, theta, **kwargs) 
+    init_graph = {}
+    #link_graph = build_graph(D, sim, theta, **kwargs)
+    link_graph = read_from_file('link_graph')
 
-    uniform_residue = 0.15
-    damping = 1 - uniform_residue
+    prob = 0.15
     for doc in link_graph:
-        result_graph[doc] = uniform_residue
+        init_graph[doc] = prob / len(link_graph)
 
     max_iters = 50
     if 'iter' in kwargs:
         max_iters = kwargs['iter']
 
-    result_graph = page_rank(result_graph, link_graph, damping, max_iters, **kwargs)
-    print(result_graph)
+    ranked_graph = page_rank(init_graph, link_graph, prob, max_iters, **kwargs)
 
-    return
+    #TODO: Define alpha to weight page ranking with other things.
+    query = topics[q]
+    sim_method = sim_method_helper(sim)
+    sim_dic = sim_method(query, read_from_file('test_dic'), theta, **kwargs)
+
+    sim_weight = 0.5
+    if 'sim_weight' in kwargs:
+        sim_weight = kwargs['sim_weight']
+    pr_weight = 1 - sim_weight
+
+    # Rebalances similarity based on page rank
+    for doc in sim_dic:
+        sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]
+
+    # Retrieve top p documents
+    sorted_dic = sorted(sim_dic, key = sim_dic.get, reverse=True)
+    result = []
+
+    for i in range(p):
+        doc = sorted_dic[i]
+        result += [(doc, sim_dic[doc]),]
+
+    print(result)
+    return result
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    print(build_graph(None, 'cosine', 0.3))
+    global topics 
+    topics = read_from_file('topics_processed')
+
+    #print(build_graph(None, 'cosine', 0.3))
+
+    undirected_page_rank(143, None, 5, 'cosine', 0.3)
     return
 
 

@@ -7,7 +7,7 @@ import pickle
 # a file
 # -----------------------------------------------------------------------------
 def write_to_file(dic, filename):
-    with open('saved_data/{}.txt'.format(filename), 'wb') as write_f:
+    with open('material/saved_data/{}.txt'.format(filename), 'wb') as write_f:
         pickle.dump(dic, write_f)
     return
 
@@ -16,5 +16,5 @@ def write_to_file(dic, filename):
 # a file
 # -----------------------------------------------------------------------------
 def read_from_file(filename):
-    with open('saved_data/{}.txt'.format(filename), 'rb') as read_f:
+    with open('material/saved_data/{}.txt'.format(filename), 'rb') as read_f:
         return pickle.load(read_f) 

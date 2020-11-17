@@ -29,6 +29,9 @@ from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
 from textblob import TextBlob
 
+# File imports
+from proj_utilities import *
+
 topics = {}
 judged_documents = {}
 index_id = 1
@@ -56,7 +59,7 @@ def getTopics(directory):
 
         number = split_topic[0].split(' ')[2][1:]
         title = processing(split_topic[1])
-        topics[int(number)] = re.sub(' +',' ',title)  
+        topics[int(number)] = re.sub(' +',' ',title)
     return
 
 # -------------------------------------------------------------------------------------------------
