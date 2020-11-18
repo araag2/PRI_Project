@@ -86,16 +86,22 @@ def tfidf_process(doc_query, doc_dic, **kwargs):
     return [doc_keys, doc_vector, doc_list_vectors]
 
 
-# -----------------------------------------------------------------------------
-# manhattan_distance_dic - Computes the cosine similarity between a document
+# -------------------------------------------------------------------------------------
+# manhattan_distance_dic - Computes the manhattan distance between a document
 # and a given list of documents
 #
-# Input: 
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        doc_dic - Dictionary that contains all documents 
+#        theta - The similarity threshold 
 #
-# Behaviour: 
+# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
+# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
+# similarity based on the inverse manhattan distance between all document vectors. 
+# In the end returns a dictionary with all documents that have their similarity values
+# (1/distance) greater than or equal to theta.
 #
-# Output: 
-# -----------------------------------------------------------------------------
+# Output: Dictionary with all documents that pass the similarity treshold
+# -------------------------------------------------------------------------------------
 def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
     result = {}
     tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
@@ -113,17 +119,20 @@ def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
     return result
 
 # -----------------------------------------------------------------------------
-# eucledian_distance_dic - Computes the cosine similarity between a document
+# eucledian_distance_dic -  Computes the eucledian distance between a document
 # and a given list of documents
 #
-# Input:  - The document collection to build our graph with
-#        sim - The similarity measure used
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        doc_dic - Dictionary that contains all documents 
 #        theta - The similarity threshold 
-#        kwargs -
 #
-# Behaviour: 
+# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
+# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
+# similarity based on the inverse eucledian distance between all document vectors. 
+# In the end returns a dictionary with all documents that have their similarity values
+# (1/distance) greater than or equal to theta.
 #
-# Output: 
+# Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
 def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
     result = {}
@@ -145,11 +154,17 @@ def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
 # cosine_similarity_dic - Computes the cosine similarity between a document
 # and a given list of documents
 #
-# Input: 
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        doc_dic - Dictionary that contains all documents 
+#        theta - The similarity threshold 
 #
-# Behaviour: 
+# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
+# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
+# similarity based on the cosine similarity measure between all document vectors. 
+# In the end returns a dictionary with all documents that have their similarity values
+# greater than or equal to theta.
 #
-# Output: 
+# Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
 def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
     result = {}
@@ -199,7 +214,6 @@ def sim_method_helper(sim):
 # Input: D - The document collection to build our graph with
 #        sim - [*cosine | eucledian | manhattan] : The similarity measure used
 #        theta - The similarity threshold 
-#        kwargs -
 #
 # Behaviour: This function starts by creating the necessary structures for each
 # of the give graph entries, and then proceeds to calculate the necessary
@@ -219,7 +233,6 @@ def build_graph(D, sim, theta, **kwargs):
     sim_method = sim_method_helper(sim)
 
     for doc in doc_dic:
-        start_time = time.time()
         doc_id = doc
         similarity_dic = sim_method(doc_dic[doc], doc_dic, theta, **kwargs)
 
