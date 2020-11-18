@@ -36,7 +36,7 @@ topics = {}
 judged_documents = {}
 index_id = 1
 # -----------------------------------------------------------------------
-# getTopics - Auxiliary function that gathers info on all topics
+# get_topics - Auxiliary function that gathers info on all topics
 #
 # Input: directory - Directory path for project materials
 # 
@@ -45,8 +45,8 @@ index_id = 1
 #
 # Output: None
 # -----------------------------------------------------------------------
-def getTopics(directory):
-    global topics
+def get_topics(directory):
+    topics = {}
     
     topic_f = open('{}topics.txt'.format(directory), 'r')
     parsed_file = BeautifulSoup(topic_f.read(), 'lxml')
@@ -60,7 +60,7 @@ def getTopics(directory):
         number = split_topic[0].split(' ')[2][1:]
         title = processing(split_topic[1])
         topics[int(number)] = re.sub(' +',' ',title)
-    return
+    return topics
 
 # -------------------------------------------------------------------------------------------------
 # get_R_set - Auxiliary function that extracts the R set
@@ -840,10 +840,11 @@ def overlapping_terms():
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
+    global topics
     #material_dic = 'material/'
 
     #R_set = get_R_set(material_dic)
-    #getTopics(material_dic)
+    #topics = get_topics(material_dic)
 
     #evaluation([120], R_set[0], [None], ranking='RRF')
     return

@@ -38,6 +38,7 @@ from textblob import TextBlob
 from _main_ import get_files_from_directory
 from _main_ import process_collection
 from _main_ import get_judged_docs
+from _main_ import get_topics
 from _main_ import ranking_page_rank
 from proj_utilities import *
 
@@ -210,7 +211,6 @@ def sim_method_helper(sim):
 # ------------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
     doc_dic = process_collection(D, False, **kwargs)
-    #doc_dic = read_from_file('judged_docs_processed')
 
     graph = {}
     for doc in doc_dic:
@@ -328,7 +328,6 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     D_processed = process_collection(D, False)
 
     #TODO: Remove this
-    #link_graph = read_from_file('link_graph')
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
 
     query = topics[q]
@@ -358,17 +357,11 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 # --------------------------------------------------------------------------------
 def main():
     global topics 
-    topics = read_from_file('topics_processed')
-
-    #D_judged = read_from_file('judged_docs_processed')
-    #build_graph(None, 'cosine', 0.3)
+    topics = get_topics('material/')
     D = get_files_from_directory('../rcv1_test/19960820/')
+    print(build_graph(D, 'cosine', 0.3))
 
-    undirected_page_rank(140, D, 5, 'cosine', 0.3, prior='non-uniform')
-
-    
-
-    
+    #undirected_page_rank(140, D, 5, 'cosine', 0.3, prior='non-uniform')
     return
 
 
