@@ -506,6 +506,25 @@ def reciprocal_rank_fusion(p, ranking_lists):
 
     return results
 
+# ------------------------------------------------------------------------------------------------
+# ranking_for_page_rank - Function that uses our ranking function to format data for page_rank
+# non-uniform priors
+# -------------------------------------------------------------------------------------------------
+def ranking_page_rank(query, p, D, **kwargs):
+    
+    I = indexing(D, **kwargs)[0]
+    term_dic = {}
+
+    with I.searcher(weighting=scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)) as searcher:
+        parser = QueryParser("content", I.schema, group=OrGroup).parse(query)
+        results = searcher.search(parser, limit=p)
+        
+        if p != None:
+            for i in range(p):
+                if i < len(results):
+                    term_dic[int(results[i].values()[1])] = results.score(i)
+
+    return term_dic
 
 # ------------------------------------------------------------------------------------------------
 # ranking - Function that will query all documents in index I and rank the top p ones
