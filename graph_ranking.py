@@ -218,7 +218,6 @@ def build_graph(D, sim, theta, **kwargs):
 
     sim_method = sim_method_helper(sim)
 
-    #print(len(doc_dic))
     for doc in doc_dic:
         start_time = time.time()
         doc_id = doc
@@ -229,9 +228,6 @@ def build_graph(D, sim, theta, **kwargs):
                 graph[doc_id][simil_doc] = similarity_dic[simil_doc]
                 graph[simil_doc][doc_id] = similarity_dic[simil_doc]
 
-        #print("One iteration takes:{}".format(time.time()-start_time))
-
-    #write_to_file(graph, 'judged_docs_linked_graph')
     return graph
 
 # -----------------------------------------------------------------------
@@ -244,16 +240,17 @@ def build_graph(D, sim, theta, **kwargs):
 # Output:
 # -----------------------------------------------------------------------
 def page_rank(link_graph, q, D, **kwargs):
+    result_graph = {}
+
     max_iters = 50 if 'iter' not in kwargs else kwargs['iter']
     p = 0.15 if 'p' not in kwargs else kwargs['p']
     N = len(link_graph)
     damping = 1 - p
     prior = None
 
-    if 'prior' not in kwargs:
+    if 'prior' not in kwargs or kwargs['prior'] == 'uniform':
         prior = p / N
 
-        result_graph = {}
         # Setting uniform priors
         for doc in link_graph:
             result_graph[doc] = prior
@@ -276,7 +273,7 @@ def page_rank(link_graph, q, D, **kwargs):
             result_graph = iter_graph
 
     elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
-        ranked_dic = ranking_page_rank(query, len(link_graph), D, **kwargs)
+        ranked_dic = ranking_page_rank(topics[q], len(link_graph), D, **kwargs)
         prior_dic = {}
 
         # Initialize prior using original IR system
@@ -298,7 +295,6 @@ def page_rank(link_graph, q, D, **kwargs):
         for _ in range(max_iters):
             iter_graph = {}
 
-            #TODO: CHECK MATH HERE 
             for doc in result_graph:
                 cumulative_prior = 0
                 cumulative_post = 0
@@ -323,33 +319,28 @@ def page_rank(link_graph, q, D, **kwargs):
 # Output:
 # -----------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
-    init_graph = {}
     link_graph = build_graph(D, sim, theta, **kwargs)
-    D_processed = process_collection(D, False)
-
-    #TODO: Remove this
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
 
     query = topics[q]
     sim_method = sim_method_helper(sim)
-    sim_dic = sim_method(query, D_processed, theta, **kwargs)
+    sim_dic = sim_method(query, process_collection(D, False), theta, **kwargs)
 
-    sim_weight = 0.15 if 'sim_weight' not in kwargs else kwargs['sim_weight']
+    sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
-
     # Rebalances similarity based on page rank
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]
 
     # Retrieve top p documents
     sorted_dic = sorted(sim_dic, key = sim_dic.get, reverse=True)
-    result = []
 
-    for i in range(p):
+    result = []
+    result_range = range(p) if p <= len(sorted_dic) else range(len(sorted_dic))
+    for i in result_range:
         doc = sorted_dic[i]
         result += [(doc, sim_dic[doc]),]
 
-    print(result)
     return result
 
 # --------------------------------------------------------------------------------
@@ -358,10 +349,10 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 def main():
     global topics 
     topics = get_topics('material/')
-    D = get_files_from_directory('../rcv1_test/19960820/')
-    print(build_graph(D, 'cosine', 0.3))
+    D = get_files_from_directory('../rcv1_test/19960820/')[1]
+    #print(build_graph(D, 'cosine', 0.15))
+    print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='non-uniform'))
 
-    #undirected_page_rank(140, D, 5, 'cosine', 0.3, prior='non-uniform')
     return
 
 
