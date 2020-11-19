@@ -243,15 +243,26 @@ def build_graph(D, sim, theta, **kwargs):
 
     return graph
 
-# -----------------------------------------------------------------------
-# page_rank - 
+# ---------------------------------------------------------------------------------------------------------
+# page_rank - Function that directly uses the Page Rank algorithm with a 
+# variation for undirected graphs and uses it to calculate a score for each
+# candidate based on the provided link_graph. 
 #
-# Input: 
+# Input: link_graph - The undirected graph that contains all document links
+#        and their correspondent weight.
+#        q - A topic query in the form of topic identifier (int)
+#        D - The document collection we built our graph with
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               iter [*50 | int]: Number of iterations to run the algorithm in 
+#               p [*0.15 | float]: Starting p value which represents the residual probability for each node
+#               prior [*uniform | non-uniform]: Method to calculate priors in our algorithm 
 # 
-# Behaviour: 
+# Behaviour: This function starts by setting the default values for the Page Rank algorithm, and after 
+# selecting which prior to use, it applies the algorithm max_iters number of times. It also builds some
+# auxiliary structures like link_count to ensure we don't repeatly calculate const values. 
 #
-# Output:
-# -----------------------------------------------------------------------
+# Output: The resulting PageRank graph in dictionary form. 
+# ---------------------------------------------------------------------------------------------------------
 def page_rank(link_graph, q, D, **kwargs):
     result_graph = {}
 
@@ -322,15 +333,23 @@ def page_rank(link_graph, q, D, **kwargs):
 
     return result_graph
 
-# -----------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------
 # undirected_page_rank - 
 #
-# Input: 
+# Input: q - A topic query in the form of topic identifier (int)
+#        D - The document collection we built our graph with
+#        p - The number of top documents to return
+#        sim - [*cosine | eucledian | manhattan] : The similarity measure used
+#        theta - The similarity threshold
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               sim_weight [*0.5 | float in [0.0, 1.0] ]: The weight given to the base similarity measure
+#               over the PageRank results 
 # 
 # Behaviour: 
 #
-# Output:
-# -----------------------------------------------------------------------
+# Output: A list of ordered top-documents with their corresponding score in the form (d, score), ordered
+# in descending order of score.
+# -------------------------------------------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     link_graph = build_graph(D, sim, theta, **kwargs)
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
