@@ -38,6 +38,7 @@ from textblob import TextBlob
 from _main_ import get_files_from_directory
 from _main_ import process_collection
 from _main_ import get_judged_docs
+from _main_ import get_topics
 from _main_ import ranking_page_rank
 from proj_utilities import *
 
@@ -46,10 +47,9 @@ topics = {}
 
 # -----------------------------------------------------------------------------------------------------
 # tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
-# and transforms our query doc and the entire collection into tf-idf spaced vectors 
+# and transforms the entire collection into tf-idf spaced vectors 
 #
-# Input: doc_query - The query document that will be compared to the rest of the collection
-#        doc_dic - The entire document collection in dictionary form
+# Input: doc_dic - The entire document collection in dictionary form
 #        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
 #               norm [*l2 | l1]: Method to calculate the norm of each output row
 #               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
@@ -57,14 +57,14 @@ topics = {}
 #               max_features [*None | int]: 
 #
 # Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
-# Afterwards, transforms both the query document and the entire collection into vector form,
-# allowing them to be directly used to calculate similarities. It also converts structures
-# into to an easy form to manipulate at the previous higher level.
+# Afterwards, transforms the entire document collection into vector form, allowing it to be 
+# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
+# at the previous higher level.
 #
-# Output: A list of document keys (ids), the query doc in vector form and the entire doc
+# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
 # collection in vector form.
 # -----------------------------------------------------------------------------------------------------
-def tfidf_process(doc_query, doc_dic, **kwargs):
+def tfidf_process(doc_dic, **kwargs):
     doc_keys = list(doc_dic.keys())
     doc_list = []
 
@@ -80,30 +80,32 @@ def tfidf_process(doc_query, doc_dic, **kwargs):
     vec.fit(doc_list)
 
     doc_list_vectors = vec.transform(doc_list)
-    doc_vector = vec.transform([doc_query])
 
-    return [doc_keys, doc_vector, doc_list_vectors]
+    return [vec, doc_keys, doc_list_vectors]
 
 
-# -----------------------------------------------------------------------------
-# manhattan_distance_dic - Computes the cosine similarity between a document
+# -------------------------------------------------------------------------------------
+# manhattan_distance_dic - Computes the manhattan distance between a document
 # and a given list of documents
 #
-# Input: 
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
+#        theta - The similarity threshold 
 #
-# Behaviour: 
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the inverse 
+# manhattan distance between all document vectors. In the end returns a dictionary with 
+# all documents that have their similarity values (1/distance) greater than or equal to theta.
 #
-# Output: 
-# -----------------------------------------------------------------------------
-def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
+# Output: Dictionary with all documents that pass the similarity treshold
+# -------------------------------------------------------------------------------------
+def manhattan_distance_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = manhattan_distances(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = manhattan_distances(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] != 0 and 1/distance_list[i] >= theta:
@@ -112,27 +114,27 @@ def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
     return result
 
 # -----------------------------------------------------------------------------
-# eucledian_distance_dic - Computes the cosine similarity between a document
+# eucledian_distance_dic -  Computes the eucledian distance between a document
 # and a given list of documents
 #
-# Input:  - The document collection to build our graph with
-#        sim - The similarity measure used
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
 #        theta - The similarity threshold 
-#        kwargs -
 #
-# Behaviour: 
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the inverse 
+# eucledian distance between all document vectors.  In the end returns a dictionary with 
+# all documents that have their similarity values (1/distance) greater than or equal to theta.
 #
-# Output: 
+# Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
-def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
+def eucledian_distance_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = euclidean_distances(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = euclidean_distances(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] != 0 and 1/distance_list[i] >= theta:
@@ -144,21 +146,24 @@ def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
 # cosine_similarity_dic - Computes the cosine similarity between a document
 # and a given list of documents
 #
-# Input: 
+# Input: doc_query - Document that serves as basis to compare all other documents to
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
+#        theta - The similarity threshold 
 #
-# Behaviour: 
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the cosine 
+# similarity measure between all document vectors. In the end returns a dictionary with 
+# all documents that have their similarity values greater than or equal to theta.
 #
-# Output: 
+# Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
-def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
+def cosine_similarity_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = cosine_similarity(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = cosine_similarity(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] >= theta:
@@ -198,7 +203,6 @@ def sim_method_helper(sim):
 # Input: D - The document collection to build our graph with
 #        sim - [*cosine | eucledian | manhattan] : The similarity measure used
 #        theta - The similarity threshold 
-#        kwargs -
 #
 # Behaviour: This function starts by creating the necessary structures for each
 # of the give graph entries, and then proceeds to calculate the necessary
@@ -209,8 +213,14 @@ def sim_method_helper(sim):
 # connect all documents on the basis of the given similarity measure
 # ------------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
-    doc_dic = process_collection(D, False, **kwargs)
-    #doc_dic = read_from_file('judged_docs_processed')
+    #doc_dic = process_collection(D, False, **kwargs)
+    doc_dic = read_from_file('judged_docs_processed')
+
+    tfidf_vectorizer_info = tfidf_process(doc_dic, **kwargs)
+
+    vectorizer = tfidf_vectorizer_info[0]
+    doc_keys = tfidf_vectorizer_info[1]
+    doc_vectors = tfidf_vectorizer_info[2]
 
     graph = {}
     for doc in doc_dic:
@@ -218,42 +228,49 @@ def build_graph(D, sim, theta, **kwargs):
 
     sim_method = sim_method_helper(sim)
 
-    #print(len(doc_dic))
     for doc in doc_dic:
-        start_time = time.time()
-        doc_id = doc
-        similarity_dic = sim_method(doc_dic[doc], doc_dic, theta, **kwargs)
+        similarity_dic = sim_method([doc_dic[doc]], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
 
         for simil_doc in similarity_dic:
-            if doc_id != simil_doc:
-                graph[doc_id][simil_doc] = similarity_dic[simil_doc]
-                graph[simil_doc][doc_id] = similarity_dic[simil_doc]
-
-        #print("One iteration takes:{}".format(time.time()-start_time))
-
-    #write_to_file(graph, 'judged_docs_linked_graph')
+            if doc != simil_doc:
+                graph[doc][simil_doc] = similarity_dic[simil_doc]
+                graph[simil_doc][doc] = similarity_dic[simil_doc]
+        
+    write_to_file(graph, "judged_docs_link_graph_030")
     return graph
 
-# -----------------------------------------------------------------------
-# page_rank - 
+# ---------------------------------------------------------------------------------------------------------
+# page_rank - Function that directly uses the Page Rank algorithm with a 
+# variation for undirected graphs and uses it to calculate a score for each
+# candidate based on the provided link_graph. 
 #
-# Input: 
+# Input: link_graph - The undirected graph that contains all document links
+#        and their correspondent weight.
+#        q - A topic query in the form of topic identifier (int)
+#        D - The document collection we built our graph with
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               iter [*50 | int]: Number of iterations to run the algorithm in 
+#               p [*0.15 | float]: Starting p value which represents the residual probability for each node
+#               prior [*uniform | non-uniform]: Method to calculate priors in our algorithm 
 # 
-# Behaviour: 
+# Behaviour: This function starts by setting the default values for the Page Rank algorithm, and after 
+# selecting which prior to use, it applies the algorithm max_iters number of times. It also builds some
+# auxiliary structures like link_count to ensure we don't repeatly calculate const values. 
 #
-# Output:
-# -----------------------------------------------------------------------
+# Output: The resulting PageRank graph in dictionary form. 
+# ---------------------------------------------------------------------------------------------------------
 def page_rank(link_graph, q, D, **kwargs):
+    result_graph = {}
+
     max_iters = 50 if 'iter' not in kwargs else kwargs['iter']
     p = 0.15 if 'p' not in kwargs else kwargs['p']
     N = len(link_graph)
     damping = 1 - p
     prior = None
 
-    if 'prior' not in kwargs:
+    if 'prior' not in kwargs or kwargs['prior'] == 'uniform':
         prior = p / N
 
-        result_graph = {}
         # Setting uniform priors
         for doc in link_graph:
             result_graph[doc] = prior
@@ -276,7 +293,7 @@ def page_rank(link_graph, q, D, **kwargs):
             result_graph = iter_graph
 
     elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
-        ranked_dic = ranking_page_rank(query, len(link_graph), D, **kwargs)
+        ranked_dic = ranking_page_rank(topics[q], len(link_graph), D, **kwargs)
         prior_dic = {}
 
         # Initialize prior using original IR system
@@ -298,7 +315,6 @@ def page_rank(link_graph, q, D, **kwargs):
         for _ in range(max_iters):
             iter_graph = {}
 
-            #TODO: CHECK MATH HERE 
             for doc in result_graph:
                 cumulative_prior = 0
                 cumulative_post = 0
@@ -313,44 +329,58 @@ def page_rank(link_graph, q, D, **kwargs):
 
     return result_graph
 
-# -----------------------------------------------------------------------
-# undirected_page_rank - 
+# -------------------------------------------------------------------------------------------------------
+# undirected_page_rank - This function applies a modified version of the PageRank algorithm for undirected
+# graphs to the provided document collection, retriving the top p documents for topic q in regars to 
+# similarity measure sim and treshold theta. 
 #
-# Input: 
+# Input: q - A topic query in the form of topic identifier (int)
+#        D - The document collection we built our graph with
+#        p - The number of top documents to return
+#        sim - [*cosine | eucledian | manhattan] : The similarity measure used
+#        theta - The similarity threshold
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               sim_weight [*0.5 | float in [0.0, 1.0] ]: The weight given to the base similarity measure
+#               over the PageRank results 
 # 
-# Behaviour: 
+# Behaviour: This function serves primarily as an encapsulation for the PageRank algorithm, and as such
+# it starts by creating the necessary structures for it to run, namely the link_graph. Afterwards, it 
+# takes the PageRank results present in PageRank and weights the final results in accordance to the 
+# results from the similarity measure sim given similiraty weight sim_weight. In the end it selects the
+# top p perfoming documents for query q and returns them in list form.
 #
-# Output:
-# -----------------------------------------------------------------------
+# Output: A list of ordered top-documents with their corresponding score in the form (d, score), ordered
+# in descending order of score.
+# -------------------------------------------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
-    init_graph = {}
     link_graph = build_graph(D, sim, theta, **kwargs)
-    D_processed = process_collection(D, False)
-
-    #TODO: Remove this
-    #link_graph = read_from_file('link_graph')
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
 
     query = topics[q]
     sim_method = sim_method_helper(sim)
-    sim_dic = sim_method(query, D_processed, theta, **kwargs)
 
-    sim_weight = 0.15 if 'sim_weight' not in kwargs else kwargs['sim_weight']
+    tdidf_info = tfidf_process(process_collection(D, False), **kwargs)
+    vectorizer = tdidf_info[0]
+    doc_keys = tdidf_info[1]
+    doc_vectors = tdidf_info[2]
+
+    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
+
+    sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
-
     # Rebalances similarity based on page rank
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]
 
     # Retrieve top p documents
     sorted_dic = sorted(sim_dic, key = sim_dic.get, reverse=True)
-    result = []
 
-    for i in range(p):
+    result = []
+    result_range = range(p) if p <= len(sorted_dic) else range(len(sorted_dic))
+    for i in result_range:
         doc = sorted_dic[i]
         result += [(doc, sim_dic[doc]),]
 
-    print(result)
     return result
 
 # --------------------------------------------------------------------------------
@@ -358,17 +388,12 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 # --------------------------------------------------------------------------------
 def main():
     global topics 
-    topics = read_from_file('topics_processed')
+    topics = get_topics('material/')
+    #D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    #D_judged = read_from_file('judged_docs_processed')
-    #build_graph(None, 'cosine', 0.3)
-    D = get_files_from_directory('../rcv1_test/19960820/')
+    print(build_graph(None, 'cosine', 0.30))
+    #print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='uniform'))
 
-    undirected_page_rank(140, D, 5, 'cosine', 0.3, prior='non-uniform')
-
-    
-
-    
     return
 
 
