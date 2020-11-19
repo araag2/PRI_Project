@@ -60,6 +60,12 @@ topics = {}
 
 def training(q, d_train, r_train, **kwargs):
     
+    r_labels = {}
+    for doc in r_train:
+        r_labels[doc] = r_train[doc]
+    
+    vectorizer = TfidfVectorizer()
+
     return
 
 # classify
@@ -87,7 +93,7 @@ def classify(d, q, M, **kwargs):
 # relevance feedback. In the presence of relevance feedback, training and
 # testing functions are called for each topic in Qtest for a more comprehensive assessment
 #
-# Output: performance statistics regarding the underlying classication system and
+# Output: performance statistics regarding the underlying classification system and
 # the behavior of the aided IR system
 
 def evaluate(q_test, d_test, r_test, **kwargs):

@@ -236,7 +236,6 @@ def build_graph(D, sim, theta, **kwargs):
                 graph[doc][simil_doc] = similarity_dic[simil_doc]
                 graph[simil_doc][doc] = similarity_dic[simil_doc]
         
-    write_to_file(graph, "judged_docs_link_graph_030")
     return graph
 
 # ---------------------------------------------------------------------------------------------------------
@@ -353,18 +352,21 @@ def page_rank(link_graph, q, D, **kwargs):
 # in descending order of score.
 # -------------------------------------------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
-    link_graph = build_graph(D, sim, theta, **kwargs)
+    #link_graph = build_graph(D, sim, theta, **kwargs)
+    link_graph = read_from_file('judged_docs_link_graph_030')
+
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
 
     query = topics[q]
     sim_method = sim_method_helper(sim)
 
-    tdidf_info = tfidf_process(process_collection(D, False), **kwargs)
+    #tdidf_info = tfidf_process(process_collection(D, False), **kwargs)
+    tdidf_info = tfidf_process(read_from_file('judged_docs_processed'), **kwargs)
     vectorizer = tdidf_info[0]
     doc_keys = tdidf_info[1]
     doc_vectors = tdidf_info[2]
 
-    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
+    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, 0, **kwargs)
 
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
@@ -391,8 +393,8 @@ def main():
     topics = get_topics('material/')
     #D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    print(build_graph(None, 'cosine', 0.30))
-    #print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='uniform'))
+    #print(build_graph(None, 'cosine', 0.30))
+    print(undirected_page_rank(150, None, 5, 'cosine', 0.3, prior='uniform'))
 
     return
 

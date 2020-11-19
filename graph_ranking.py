@@ -362,7 +362,7 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     doc_keys = tdidf_info[1]
     doc_vectors = tdidf_info[2]
 
-    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
+    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, 0, **kwargs)
 
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
@@ -389,8 +389,8 @@ def main():
     topics = get_topics('material/')
     D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    print(build_graph(D, 'cosine', 0.15))
-    #print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='uniform'))
+    print(build_graph(D, 'cosine', 0.3))
+    #print(undirected_page_rank(101, D, 5, 'cosine', 0.3, prior='uniform'))
 
     return
 
