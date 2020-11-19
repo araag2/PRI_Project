@@ -47,10 +47,9 @@ topics = {}
 
 # -----------------------------------------------------------------------------------------------------
 # tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
-# and transforms our query doc and the entire collection into tf-idf spaced vectors 
+# and transforms the entire collection into tf-idf spaced vectors 
 #
-# Input: doc_query - The query document that will be compared to the rest of the collection
-#        doc_dic - The entire document collection in dictionary form
+# Input: doc_dic - The entire document collection in dictionary form
 #        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
 #               norm [*l2 | l1]: Method to calculate the norm of each output row
 #               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
@@ -58,14 +57,14 @@ topics = {}
 #               max_features [*None | int]: 
 #
 # Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
-# Afterwards, transforms both the query document and the entire collection into vector form,
-# allowing them to be directly used to calculate similarities. It also converts structures
-# into to an easy form to manipulate at the previous higher level.
+# Afterwards, transforms the entire document collection into vector form, allowing it to be 
+# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
+# at the previous higher level.
 #
-# Output: A list of document keys (ids), the query doc in vector form and the entire doc
+# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
 # collection in vector form.
 # -----------------------------------------------------------------------------------------------------
-def tfidf_process(doc_query, doc_dic, **kwargs):
+def tfidf_process(doc_dic, **kwargs):
     doc_keys = list(doc_dic.keys())
     doc_list = []
 
@@ -81,9 +80,8 @@ def tfidf_process(doc_query, doc_dic, **kwargs):
     vec.fit(doc_list)
 
     doc_list_vectors = vec.transform(doc_list)
-    doc_vector = vec.transform([doc_query])
 
-    return [doc_keys, doc_vector, doc_list_vectors]
+    return [vec, doc_keys, doc_list_vectors]
 
 
 # -------------------------------------------------------------------------------------
@@ -91,26 +89,23 @@ def tfidf_process(doc_query, doc_dic, **kwargs):
 # and a given list of documents
 #
 # Input: doc_query - Document that serves as basis to compare all other documents to
-#        doc_dic - Dictionary that contains all documents 
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
 #        theta - The similarity threshold 
 #
-# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
-# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
-# similarity based on the inverse manhattan distance between all document vectors. 
-# In the end returns a dictionary with all documents that have their similarity values
-# (1/distance) greater than or equal to theta.
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the inverse 
+# manhattan distance between all document vectors. In the end returns a dictionary with 
+# all documents that have their similarity values (1/distance) greater than or equal to theta.
 #
 # Output: Dictionary with all documents that pass the similarity treshold
 # -------------------------------------------------------------------------------------
-def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
+def manhattan_distance_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = manhattan_distances(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = manhattan_distances(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] != 0 and 1/distance_list[i] >= theta:
@@ -123,26 +118,23 @@ def manhattan_distance_dic(doc_query, doc_dic, theta, **kwargs):
 # and a given list of documents
 #
 # Input: doc_query - Document that serves as basis to compare all other documents to
-#        doc_dic - Dictionary that contains all documents 
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
 #        theta - The similarity threshold 
 #
-# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
-# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
-# similarity based on the inverse eucledian distance between all document vectors. 
-# In the end returns a dictionary with all documents that have their similarity values
-# (1/distance) greater than or equal to theta.
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the inverse 
+# eucledian distance between all document vectors.  In the end returns a dictionary with 
+# all documents that have their similarity values (1/distance) greater than or equal to theta.
 #
 # Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
-def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
+def eucledian_distance_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = euclidean_distances(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = euclidean_distances(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] != 0 and 1/distance_list[i] >= theta:
@@ -155,26 +147,23 @@ def eucledian_distance_dic(doc_query, doc_dic, theta, **kwargs):
 # and a given list of documents
 #
 # Input: doc_query - Document that serves as basis to compare all other documents to
-#        doc_dic - Dictionary that contains all documents 
+#        vectorizer - The structure that contains our tf-idf vectorizer
+#        doc_keys - A list of all document keys
+#        doc_vectors - All documents in vector form contained in the vectorizer space
 #        theta - The similarity threshold 
 #
-# Behaviour: It starts by creating a tf_idf vectorizer and transforming all documents
-# to their vector notation in that vectorizer space. Afterwards, it calculates pairwise
-# similarity based on the cosine similarity measure between all document vectors. 
-# In the end returns a dictionary with all documents that have their similarity values
-# greater than or equal to theta.
+# Behaviour: It starts by transforming the query document into its vector notion in the
+# vectorizer space. Afterwards, it calculates pairwise similarity based on the cosine 
+# similarity measure between all document vectors. In the end returns a dictionary with 
+# all documents that have their similarity values greater than or equal to theta.
 #
 # Output: Dictionary with all documents that pass the similarity treshold
 # -----------------------------------------------------------------------------
-def cosine_similarity_dic(doc_query, doc_dic, theta, **kwargs):
+def cosine_similarity_dic(doc_query, vectorizer, doc_keys, doc_vectors, theta, **kwargs):
     result = {}
-    tfidf_processed_list = tfidf_process(doc_query, doc_dic, **kwargs)
 
-    doc_keys = tfidf_processed_list[0]
-    doc_vector = tfidf_processed_list[1]
-    doc_list_vectors = tfidf_processed_list[2]
-
-    distance_list = cosine_similarity(doc_vector, doc_list_vectors)[0]
+    doc_vector = vectorizer.transform(doc_query)
+    distance_list = cosine_similarity(doc_vector, doc_vectors)[0]
 
     for i in range(len(distance_list)):
         if distance_list[i] >= theta:
@@ -226,6 +215,12 @@ def sim_method_helper(sim):
 def build_graph(D, sim, theta, **kwargs):
     doc_dic = process_collection(D, False, **kwargs)
 
+    tfidf_vectorizer_info = tfidf_process(doc_dic, **kwargs)
+
+    vectorizer = tfidf_vectorizer_info[0]
+    doc_keys = tfidf_vectorizer_info[1]
+    doc_vectors = tfidf_vectorizer_info[2]
+
     graph = {}
     for doc in doc_dic:
         graph[doc] = {}
@@ -233,13 +228,12 @@ def build_graph(D, sim, theta, **kwargs):
     sim_method = sim_method_helper(sim)
 
     for doc in doc_dic:
-        doc_id = doc
-        similarity_dic = sim_method(doc_dic[doc], doc_dic, theta, **kwargs)
+        similarity_dic = sim_method([doc_dic[doc]], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
 
         for simil_doc in similarity_dic:
-            if doc_id != simil_doc:
-                graph[doc_id][simil_doc] = similarity_dic[simil_doc]
-                graph[simil_doc][doc_id] = similarity_dic[simil_doc]
+            if doc != simil_doc:
+                graph[doc][simil_doc] = similarity_dic[simil_doc]
+                graph[simil_doc][doc] = similarity_dic[simil_doc]
 
     return graph
 
@@ -362,7 +356,13 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 
     query = topics[q]
     sim_method = sim_method_helper(sim)
-    sim_dic = sim_method(query, process_collection(D, False), theta, **kwargs)
+
+    tdidf_info = tfidf_process(process_collection(D, False), **kwargs)
+    vectorizer = tdidf_info[0]
+    doc_keys = tdidf_info[1]
+    doc_vectors = tdidf_info[2]
+
+    sim_dic = sim_method([query], vectorizer, doc_keys, doc_vectors, theta, **kwargs)
 
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
@@ -388,8 +388,9 @@ def main():
     global topics 
     topics = get_topics('material/')
     D = get_files_from_directory('../rcv1_test/19960820/')[1]
-    #print(build_graph(D, 'cosine', 0.15))
-    print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='non-uniform'))
+
+    print(build_graph(D, 'cosine', 0.15))
+    #print(undirected_page_rank(101, D, 5, 'cosine', 0.1, prior='uniform'))
 
     return
 
