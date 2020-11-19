@@ -334,7 +334,9 @@ def page_rank(link_graph, q, D, **kwargs):
     return result_graph
 
 # -------------------------------------------------------------------------------------------------------
-# undirected_page_rank - 
+# undirected_page_rank - This function applies a modified version of the PageRank algorithm for undirected
+# graphs to the provided document collection, retriving the top p documents for topic q in regars to 
+# similarity measure sim and treshold theta. 
 #
 # Input: q - A topic query in the form of topic identifier (int)
 #        D - The document collection we built our graph with
@@ -345,7 +347,11 @@ def page_rank(link_graph, q, D, **kwargs):
 #               sim_weight [*0.5 | float in [0.0, 1.0] ]: The weight given to the base similarity measure
 #               over the PageRank results 
 # 
-# Behaviour: 
+# Behaviour: This function serves primarily as an encapsulation for the PageRank algorithm, and as such
+# it starts by creating the necessary structures for it to run, namely the link_graph. Afterwards, it 
+# takes the PageRank results present in PageRank and weights the final results in accordance to the 
+# results from the similarity measure sim given similiraty weight sim_weight. In the end it selects the
+# top p perfoming documents for query q and returns them in list form.
 #
 # Output: A list of ordered top-documents with their corresponding score in the form (d, score), ordered
 # in descending order of score.
