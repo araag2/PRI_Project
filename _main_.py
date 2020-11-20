@@ -73,7 +73,7 @@ def get_topics(directory):
 #
 # Output: [R-Test, R-Train], each being a list of triplet entries
 # -------------------------------------------------------------------------------------------------
-def get_R_set(directory):
+def get_R_set(directory, **kwargs):
     global judged_documents
 
     r_test_f = open('{}qrels_test.txt'.format(directory), 'r')
