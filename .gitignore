@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Saved Data Locally
+saved_data/
+index1_dir/

@@ -36,6 +36,7 @@ from textblob import TextBlob
 
 # File imports
 from _main_ import get_files_from_directory
+from _main_ import tfidf_process
 from _main_ import process_collection
 from _main_ import get_judged_docs
 from _main_ import get_topics
@@ -44,45 +45,6 @@ from proj_utilities import *
 
 #Global variables
 topics = {}
-
-# -----------------------------------------------------------------------------------------------------
-# tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
-# and transforms the entire collection into tf-idf spaced vectors 
-#
-# Input: doc_dic - The entire document collection in dictionary form
-#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
-#               norm [*l2 | l1]: Method to calculate the norm of each output row
-#               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
-#               max_df [*1.0 | float | int]: Ignore the terms which have a freq higher than man_df
-#               max_features [*None | int]: 
-#
-# Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
-# Afterwards, transforms the entire document collection into vector form, allowing it to be 
-# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
-# at the previous higher level.
-#
-# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
-# collection in vector form.
-# -----------------------------------------------------------------------------------------------------
-def tfidf_process(doc_dic, **kwargs):
-    doc_keys = list(doc_dic.keys())
-    doc_list = []
-
-    for doc in doc_keys:
-        doc_list += [doc_dic[doc], ]
-
-    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
-    min_df = 1 if 'min_df' not in kwargs else kwargs['min_df']
-    max_df = 1.0 if 'max_df' not in kwargs else kwargs['max_df']
-    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-
-    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
-    vec.fit(doc_list)
-
-    doc_list_vectors = vec.transform(doc_list)
-
-    return [vec, doc_keys, doc_list_vectors]
-
 
 # -------------------------------------------------------------------------------------
 # manhattan_distance_dic - Computes the manhattan distance between a document
@@ -291,6 +253,8 @@ def page_rank(link_graph, q, D, **kwargs):
             result_graph = iter_graph
 
     elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
+
+        # TODO: Check different priors
         ranked_dic = ranking_page_rank(topics[q], len(link_graph), D, **kwargs)
         prior_dic = {}
 
@@ -367,7 +331,7 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
 
-    #TODO: Normalize weights
+    #TODO: Normalize weights (Zscore)
     # Rebalances similarity based on page rank
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]

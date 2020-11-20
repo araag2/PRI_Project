@@ -89,7 +89,7 @@ def training(q, d_train, r_train, **kwargs):
         classifier.fit(X=d_train_vec, y=r_train_vec)
         trained.append(classifier)
 
-    trained_classifier[q] = trained
+    trained_classifiers[q] = trained
 
     return
 

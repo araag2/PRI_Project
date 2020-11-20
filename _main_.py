@@ -25,6 +25,7 @@ from whoosh import scoring
 from whoosh.qparser import *
 from whoosh.fields import *
 from sklearn.metrics import *
+from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
 from textblob import TextBlob
@@ -155,22 +156,60 @@ def get_files_from_directory(path, **kwargs):
     parsed_files_test = []
     parsed_files_train = []
 
-    for f in file_list:
-        date_identifier = int(f.split('/')[2])
+    #TODO: You can remove this afterwards, just makes things faster
+    if "set" in kwargs and kwargs['set'] == "test":
+        for f in file_list:
+            date_identifier = int(f.split('/')[2])
 
-        open_file = open(f, 'r')
-        parsed_file = BeautifulSoup(open_file.read(), 'lxml')
-        
-        if parsed_file.copyright != None:
-            parsed_file.copyright.decompose()
+            if date_identifier <= 19960930:
+                continue
 
-        if parsed_file.codes != None:
-            parsed_file.codes.decompose()
-              
-        if date_identifier <= 19960930:
-            parsed_files_train += [parsed_file,]
-        else:
+            open_file = open(f, 'r')
+            parsed_file = BeautifulSoup(open_file.read(), 'lxml')
+            
+            if parsed_file.copyright != None:
+                parsed_file.copyright.decompose()
+
+            if parsed_file.codes != None:
+                parsed_file.codes.decompose()
+                
             parsed_files_test += [parsed_file,]
+
+    elif "set" in kwargs and kwargs['set'] == "train":
+        for f in file_list:
+            date_identifier = int(f.split('/')[2])
+
+            if date_identifier > 19960930:
+                break
+
+            open_file = open(f, 'r')
+            parsed_file = BeautifulSoup(open_file.read(), 'lxml')
+            
+            if parsed_file.copyright != None:
+                parsed_file.copyright.decompose()
+
+            if parsed_file.codes != None:
+                parsed_file.codes.decompose()
+                
+            parsed_files_train += [parsed_file,]
+
+    else:
+        for f in file_list:
+            date_identifier = int(f.split('/')[2])
+
+            open_file = open(f, 'r')
+            parsed_file = BeautifulSoup(open_file.read(), 'lxml')
+            
+            if parsed_file.copyright != None:
+                parsed_file.copyright.decompose()
+
+            if parsed_file.codes != None:
+                parsed_file.codes.decompose()
+                
+            if date_identifier <= 19960930:
+                parsed_files_train += [parsed_file,]
+            else:
+                parsed_files_test += [parsed_file,]
 
     return (parsed_files_test, parsed_files_train)
 
@@ -269,6 +308,46 @@ def process_collection(collection, tokenize, **kwargs):
             result[item_id] = '{}\n{}\n{}'.format(title, dateline, text)
 
     return result
+
+# -----------------------------------------------------------------------------------------------------
+# tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
+# and transforms the entire collection into tf-idf spaced vectors 
+#
+# Input: doc_dic - The entire document collection in dictionary form
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               norm [*l2 | l1]: Method to calculate the norm of each output row
+#               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
+#               max_df [*1.0 | float | int]: Ignore the terms which have a freq higher than man_df
+#               max_features [*None | int]: 
+#
+# Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
+# Afterwards, transforms the entire document collection into vector form, allowing it to be 
+# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
+# at the previous higher level.
+#
+# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
+# collection in vector form.
+# -----------------------------------------------------------------------------------------------------
+def tfidf_process(doc_dic, **kwargs):
+    doc_keys = list(doc_dic.keys())
+    doc_list = []
+
+    #TODO: Check generator concept
+    for doc in doc_keys:
+        doc_list += [doc_dic[doc], ]
+
+    #TODO: Check kwargs values
+    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
+    min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
+    max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
+    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
+
+    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
+    vec.fit(doc_list)
+
+    doc_list_vectors = vec.transform(doc_list)
+
+    return [vec, doc_keys, doc_list_vectors]
 
 # --------------------------------------------------------------------------------
 # indexing - Creates an index after processing all text on data set D
@@ -511,7 +590,7 @@ def reciprocal_rank_fusion(p, ranking_lists):
 # non-uniform priors
 # -------------------------------------------------------------------------------------------------
 def ranking_page_rank(query, p, D, **kwargs):
-    
+    #TODO: Indepedence from query
     I = indexing(D, **kwargs)[0]
     term_dic = {}
 
@@ -841,12 +920,17 @@ def overlapping_terms():
 # --------------------------------------------------------------------------------
 def main():
     global topics
-    #material_dic = 'material/'
+    material_dic = 'material/'
 
-    #R_set = get_R_set(material_dic)
-    #topics = get_topics(material_dic)
+    R_set = get_R_set(material_dic)
+    topics = get_topics(material_dic)
 
     #evaluation([120], R_set[0], [None], ranking='RRF')
+
+    print(sys.getrecursionlimit())
+    sys.setrecursionlimit(800000)
+    print(sys.getrecursionlimit())
+
     return
 
-#main()
+main()
