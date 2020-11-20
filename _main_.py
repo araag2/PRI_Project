@@ -174,7 +174,7 @@ def get_files_from_directory(path, **kwargs):
     parsed_files_train = []
 
     #TODO: You can remove this afterwards, just makes things faster
-    if "set" in kwargs and kwargs['set'] == "test":
+    if 'set' in kwargs and kwargs['set'] == 'test':
         for f in file_list:
             date_identifier = int(f.split('/')[2])
 
@@ -192,7 +192,7 @@ def get_files_from_directory(path, **kwargs):
                 
             parsed_files_test += [parsed_file,]
 
-    elif "set" in kwargs and kwargs['set'] == "train":
+    elif 'set' in kwargs and kwargs['set'] == 'train':
         for f in file_list:
             date_identifier = int(f.split('/')[2])
 
