@@ -65,11 +65,13 @@ trained_classifiers ={}
 
 def training(q, d_train, r_train, **kwargs):
     
-    r_labels = find_R_test_labels(r_train)
+    r_labels = find_R_test_labels(r_train[q])
     
+    #TODO: replace with tfidf_process
+
     norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
-    min_df = 1 if 'min_df' not in kwargs else kwargs['min_df']
-    max_df = 1.0 if 'max_df' not in kwargs else kwargs['max_df']
+    min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
+    max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
     max_features = None if 'max_features' not in kwargs else kwargs['max_features']
 
     classifiers = [MultinomialNB()]
@@ -77,11 +79,8 @@ def training(q, d_train, r_train, **kwargs):
 
     vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
 
-    #select q relevant documents in r_train
-    #select same documents in d_train (?)
-
     d_train_vec = vec.fit(d_train)
-    r_train_vec = vec.fit(r_train)
+    r_train_vec = vec.fit(r_labels)
 
     trained = []
     
