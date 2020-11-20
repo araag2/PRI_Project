@@ -263,7 +263,7 @@ def page_rank(link_graph, q, D, **kwargs):
     max_iters = 50 if 'iter' not in kwargs else kwargs['iter']
     p = 0.15 if 'p' not in kwargs else kwargs['p']
     N = len(link_graph)
-    damping = 1 - p
+    follow_p = 1 - p
     prior = None
 
     if 'prior' not in kwargs or kwargs['prior'] == 'uniform':
@@ -286,7 +286,7 @@ def page_rank(link_graph, q, D, **kwargs):
 
                 for link in link_graph[doc]:
                     cumulative_post += (result_graph[link] / link_count[doc]) 
-                iter_graph[doc] = prior + damping * cumulative_post 
+                iter_graph[doc] = prior + follow_p * cumulative_post 
 
             result_graph = iter_graph
 
@@ -321,7 +321,7 @@ def page_rank(link_graph, q, D, **kwargs):
                     cumulative_prior += prior_dic[link]
                     cumulative_post += ((result_graph[link] * link_graph[link][doc]) / link_weighted_count[doc]) 
 
-                iter_graph[doc] = p*cumulative_prior + damping * cumulative_post 
+                iter_graph[doc] = p * cumulative_prior + follow_p * cumulative_post 
 
             result_graph = iter_graph
 
@@ -366,6 +366,8 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
+
+    #TODO: Normalize weights
     # Rebalances similarity based on page rank
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]

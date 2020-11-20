@@ -33,6 +33,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.metrics.pairwise import manhattan_distances
 from textblob import TextBlob
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import Perceptron
+from sklearn.svm import LinearSVC
 
 # File imports
 from _main_ import get_files_from_directory
@@ -40,11 +44,12 @@ from _main_ import process_collection
 from _main_ import get_judged_docs
 from _main_ import get_topics
 from _main_ import ranking_page_rank
+from _main_ import find_R_test_labels
 from proj_utilities import *
 
 #Global variables
 topics = {}
-
+trained_classifiers ={}
 
 # training 
 #
@@ -60,11 +65,31 @@ topics = {}
 
 def training(q, d_train, r_train, **kwargs):
     
-    r_labels = {}
-    for doc in r_train:
-        r_labels[doc] = r_train[doc]
+    r_labels = find_R_test_labels(r_train)
     
-    vectorizer = TfidfVectorizer()
+    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
+    min_df = 1 if 'min_df' not in kwargs else kwargs['min_df']
+    max_df = 1.0 if 'max_df' not in kwargs else kwargs['max_df']
+    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
+
+    classifiers = [MultinomialNB()]
+    #classifiers = [MultinomialNB(), KNeighborsClassifier(), Perceptron(), LinearSVC()]
+
+    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
+
+    #select q relevant documents in r_train
+    #select same documents in d_train (?)
+
+    d_train_vec = vec.fit(d_train)
+    r_train_vec = vec.fit(r_train)
+
+    trained = []
+    
+    for classifier in classifiers:
+        classifier.fit(X=d_train_vec, y=r_train_vec)
+        trained.append(classifier)
+
+    trained_classifier[q] = trained
 
     return
 
@@ -104,6 +129,27 @@ def evaluate(q_test, d_test, r_test, **kwargs):
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
+    global topics
+
+    d_set = [None, None]
+    d_test = d_set[0]
+    d_train = d_set[1]
+
+    r_set = [None, None]
+    r_test = r_set[0]
+    r_train = r_set[1]
+
+    q_test = []
+
+    for q in q_test:
+        training(q, d_train, r_train)
+
+    evaluate(q_test, d_test, r_test)
+
+    r_train = find_R_test_labels('material/')[1]
+    topics = get_topics('material/')
+    
+
     return
 
 
