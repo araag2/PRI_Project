@@ -15,13 +15,13 @@ import shutil
 import sklearn
 import math
 import numpy as np
-import pandas as pd
-import matplotlib as mpl 
-import matplotlib.pyplot as plt
+#import pandas as pd
+#import matplotlib as mpl 
+#import matplotlib.pyplot as plt
 from copy import deepcopy
 from heapq import nlargest 
 from bs4 import BeautifulSoup
-from lxml import etree
+#from lxml import etree
 from whoosh import index
 from whoosh import scoring
 from whoosh.qparser import *
@@ -33,7 +33,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.cluster import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
-from textblob import TextBlob
+#from textblob import TextBlob
 
 # File imports
 from _main_ import get_files_from_directory
@@ -86,10 +86,18 @@ def tfidf_process(doc_dic, **kwargs):
     return [vec, doc_keys, doc_list_vectors]
 
 # --------------------------------------------------------------------------------
-# Kmeans Clustering
-# supposedly rand score will get /something/ to compare to the obtained clustering.
-# what????????? should it be?????? im ?????????
-# topics could go with relevance but how is that supposed to help in this case?????
+# trainsKmeans - trains the KMeans algorithm
+#
+# Input: vec_D - the set of document or topics to be clustered
+#       y - the set of ids and relevance info
+#       clusters - the list with the number of clusters to be attempted
+#       distance - parameter for the evaluation measures
+# 
+# Behaviour: creates the KMeans clusters for the number of clusters previously
+# defined, and then applies a set of evaluation measures to select the best one
+#
+# Output: A list containing te best number of clusters to use, the list of labels
+# and the rands score
 # --------------------------------------------------------------------------------
 def trainKmeans(vec_D, y, clusters, distance):
 
@@ -107,13 +115,25 @@ def trainKmeans(vec_D, y, clusters, distance):
 
     best_cluster = clusters[np.argmax(rands)]
     clustering_kmeans = KMeans(n_clusters=best_cluster).fit(vec_D)
+    labels_kmeans = clustering_kmeans.labels_
 
-    return [best_cluster, clustering_kmeans, np.max(rands)]
+    return [best_cluster, labels_kmeans, np.max(rands)]
 
 # --------------------------------------------------------------------------------
-# Agglomerative Clustering
+# trainsAgglomerative - trains the Agglomerative Clustering algorithm
+#
+# Input: vec_D - the set of document or topics to be clustered
+#       y - the set of ids and relevance info
+#       clusters - the list with the number of clusters to be attempted
+#       distance - parameter for the evaluation measures
+# 
+# Behaviour: creates the Agglomerative clusters for the number of clusters previously
+# defined, and then applies a set of evaluation measures to select the best one
+#
+# Output: A list containing te best number of clusters to use, the list of labels
+# and the rands score
 # --------------------------------------------------------------------------------
-def trainAgglomerative(vec_D, array_D, clusters, distance):
+def trainAgglomerative(vec_D, y, clusters, distance):
 
     silhouettes = []
     rands = []
@@ -129,12 +149,30 @@ def trainAgglomerative(vec_D, array_D, clusters, distance):
 
     best_cluster = clusters[np.argmax(rands)]
     clustering_agg = AgglomerativeClustering(n_clusters=best_cluster).fit(vec_D)
+    labels_agg = clustering_agg.labels_
 
-    return [best_cluster, clustering_agg, np.max(rands)]
+    return [best_cluster, labels_agg, np.max(rands)]
 
-# --------------------------------------------------------------------------------
-# clustering i guess shrugs
-# --------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------
+# Clustering: Applies Clustering, a unsupervised learning technique to classify 
+# sets of documents instead of individual documents
+#
+# Input: D - set of documents or topics to be clustered
+#       **kwargs - Optional parameters with the following functionality (default 
+#       values prefixed by *)
+#           clusters []: List with the number of clusters to attempt in the clustering algorithms
+#           distance [TODO]: 
+#
+# Behaviour: Starts by obtaining the processed collection of documents. Then vectorizes
+# them throught the function tfidf_process and obtains the vectorizer itself, the document
+# keys and the document vector. Afterwards, we obtain the r_set entries relevant to the doc keys,
+# and deal with the kwargs information. These arguments are sent to the clustering training functions
+# which return the information regarding the best clustering they found. We compare KM and AC through
+# their best rand score, and then process the information to output.
+#
+# Output: A list of cluster results. These results consist in a pair per cluster, with the cluster 
+# centroid and the set of document/topic ids which comprise it
+# ----------------------------------------------------------------------------------------------------
 def clustering(D, **kwargs):
     doc_dic = process_collection(D, False, **kwargs)
 
@@ -160,8 +198,22 @@ def clustering(D, **kwargs):
         best = best_AC
     else:
         best = best_KM
-    
-    
+        centroids = best.cluster_centers_
+
+    result = []
+    i = 0
+    while i < best[0]:
+        id_set = []
+        labels = best[1]
+        j = 0
+        while labels[j] == labels[j+1]:
+            id_set += str(doc_keys[j])
+            j+=1
+        id_set += str(doc_keys[j])
+        result.append((centroids[i],id_set))
+        i += 1
+
+    return result
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
