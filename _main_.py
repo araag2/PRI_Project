@@ -85,20 +85,37 @@ def get_R_set(directory):
     r_test_lines = [r_test_lines, r_train_lines]
     r_set = [{},{}]
     
-    for i in range(2):
-        for line in r_test_lines[i]:
-            split_entry = line.split(' ')
-            topic_id = int(split_entry[0][1:])
-            doc_id = int(split_entry[1])
+    if 'index' in kwargs and kwargs['index'] == 'doc_id':
+        for i in range(2):
+            for line in r_test_lines[i]:
+                split_entry = line.split(' ')
+                topic_id = int(split_entry[0][1:])
+                doc_id = int(split_entry[1])
 
-            if doc_id not in judged_documents: 
-                judged_documents[doc_id] = True
+                if doc_id not in judged_documents: 
+                    judged_documents[doc_id] = True
 
-            feedback = int(split_entry[2])
-            
-            if topic_id not in r_set[i]:
-                r_set[i][topic_id] = {}
-            r_set[i][topic_id][doc_id] = feedback
+                feedback = int(split_entry[2])
+
+                if doc_id not in r_set[i]:
+                    r_set[i][doc_id] = {}
+                r_set[i][doc_id][topic_id] = feedback
+
+    else:
+        for i in range(2):
+            for line in r_test_lines[i]:
+                split_entry = line.split(' ')
+                topic_id = int(split_entry[0][1:])
+                doc_id = int(split_entry[1])
+
+                if doc_id not in judged_documents: 
+                    judged_documents[doc_id] = True
+
+                feedback = int(split_entry[2])
+
+                if topic_id not in r_set[i]:
+                    r_set[i][topic_id] = {}
+                r_set[i][topic_id][doc_id] = feedback
 
     return r_set
 
