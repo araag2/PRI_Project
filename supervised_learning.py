@@ -45,11 +45,15 @@ from _main_ import get_judged_docs
 from _main_ import get_topics
 from _main_ import ranking_page_rank
 from _main_ import find_R_test_labels
+from _main_ import tfidf_process
 from proj_utilities import *
 
 #Global variables
 topics = {}
-trained_classifiers ={}
+d_train = {}
+d_test = {}
+r_train = {}
+r_test = {}
 
 # training 
 #
@@ -64,7 +68,7 @@ trained_classifiers ={}
 # Output: q-conditional classification model
 
 def training(q, d_train, r_train, **kwargs):
-    
+    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'perceptron': Perceptron, 'linearsvc' :LinearSVC}
     r_labels = find_R_test_labels(r_train[q])
     
     #TODO: replace with tfidf_process
@@ -73,24 +77,16 @@ def training(q, d_train, r_train, **kwargs):
     min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
     max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
     max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-
-    classifiers = [MultinomialNB()]
-    #classifiers = [MultinomialNB(), KNeighborsClassifier(), Perceptron(), LinearSVC()]
+    classifier = MultinomialNB() if 'classifier' not in kwargs else kwargs['classifier']
 
     vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
 
     d_train_vec = vec.fit(d_train)
-    r_train_vec = vec.fit(r_labels)
+    #r_labels = vec.fit(r_labels)
 
-    trained = []
-    
-    for classifier in classifiers:
-        classifier.fit(X=d_train_vec, y=r_train_vec)
-        trained.append(classifier)
+    classifier.fit(X=d_train_vec, y=r_labels)
 
-    trained_classifiers[q] = trained
-
-    return
+    return classifier
 
 # classify
 # 
@@ -105,7 +101,9 @@ def training(q, d_train, r_train, **kwargs):
 
 def classify(d, q, M, **kwargs):
 
-    return
+    vec = tfidf_process({'doc':d})[0]
+
+    return M.predict_proba(vec)
 
 # evaluate 
 # 
@@ -122,6 +120,11 @@ def classify(d, q, M, **kwargs):
 
 def evaluate(q_test, d_test, r_test, **kwargs):
 
+    for q in q_test:
+        classifier = training(q, d_train, r_train)
+        for d in d_test:
+            prob = classify(d, q, classifier)
+
     return
 
 # --------------------------------------------------------------------------------
@@ -129,6 +132,10 @@ def evaluate(q_test, d_test, r_test, **kwargs):
 # --------------------------------------------------------------------------------
 def main():
     global topics
+    global d_train
+    global d_test
+    global r_train
+    global r_test
 
     d_set = [None, None]
     d_test = d_set[0]
@@ -140,14 +147,10 @@ def main():
 
     q_test = []
 
-    for q in q_test:
-        training(q, d_train, r_train)
-
     evaluate(q_test, d_test, r_test)
 
     r_train = find_R_test_labels('material/')[1]
     topics = get_topics('material/')
-    
 
     return
 
