@@ -36,13 +36,13 @@ from nltk import WordNetLemmatizer
 #from textblob import TextBlob
 
 # File imports
-from _main_ import get_files_from_directory
-from _main_ import process_collection
-from _main_ import get_judged_docs
-from _main_ import get_topics
-from _main_ import ranking_page_rank
-from _main_ import get_R_set
-from _main_ import tfidf_process
+from base_IRsystem import get_files_from_directory
+from base_IRsystem import process_collection
+from base_IRsystem import get_judged_docs
+from base_IRsystem import get_topics
+from base_IRsystem import ranking_page_rank
+from base_IRsystem import get_R_set
+from base_IRsystem import tfidf_process
 from proj_utilities import *
 
 topics = {}

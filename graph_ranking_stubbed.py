@@ -4,6 +4,7 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
+
 import os, os.path
 import re
 import sys
@@ -35,54 +36,16 @@ from sklearn.metrics.pairwise import manhattan_distances
 from textblob import TextBlob
 
 # File imports
-from _main_ import get_files_from_directory
-from _main_ import process_collection
-from _main_ import get_judged_docs
-from _main_ import get_topics
-from _main_ import ranking_page_rank
+from base_IRsystem import get_files_from_directory
+from base_IRsystem import tfidf_process
+from base_IRsystem import process_collection
+from base_IRsystem import get_judged_docs
+from base_IRsystem import get_topics
+from base_IRsystem import ranking_page_rank
 from proj_utilities import *
 
 #Global variables
 topics = {}
-
-# -----------------------------------------------------------------------------------------------------
-# tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
-# and transforms the entire collection into tf-idf spaced vectors 
-#
-# Input: doc_dic - The entire document collection in dictionary form
-#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
-#               norm [*l2 | l1]: Method to calculate the norm of each output row
-#               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
-#               max_df [*1.0 | float | int]: Ignore the terms which have a freq higher than man_df
-#               max_features [*None | int]: 
-#
-# Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
-# Afterwards, transforms the entire document collection into vector form, allowing it to be 
-# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
-# at the previous higher level.
-#
-# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
-# collection in vector form.
-# -----------------------------------------------------------------------------------------------------
-def tfidf_process(doc_dic, **kwargs):
-    doc_keys = list(doc_dic.keys())
-    doc_list = []
-
-    for doc in doc_keys:
-        doc_list += [doc_dic[doc], ]
-
-    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
-    min_df = 1 if 'min_df' not in kwargs else kwargs['min_df']
-    max_df = 1.0 if 'max_df' not in kwargs else kwargs['max_df']
-    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-
-    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
-    vec.fit(doc_list)
-
-    doc_list_vectors = vec.transform(doc_list)
-
-    return [vec, doc_keys, doc_list_vectors]
-
 
 # -------------------------------------------------------------------------------------
 # manhattan_distance_dic - Computes the manhattan distance between a document
@@ -214,7 +177,7 @@ def sim_method_helper(sim):
 # ------------------------------------------------------------------------------
 def build_graph(D, sim, theta, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
-    doc_dic = read_from_file('judged_docs_processed')
+    doc_dic = read_from_file('collections_processed/Dtest_judged_collection_processed')
 
     tfidf_vectorizer_info = tfidf_process(doc_dic, **kwargs)
 
@@ -235,7 +198,7 @@ def build_graph(D, sim, theta, **kwargs):
             if doc != simil_doc:
                 graph[doc][simil_doc] = similarity_dic[simil_doc]
                 graph[simil_doc][doc] = similarity_dic[simil_doc]
-        
+
     return graph
 
 # ---------------------------------------------------------------------------------------------------------
@@ -264,7 +227,7 @@ def page_rank(link_graph, q, D, **kwargs):
     max_iters = 50 if 'iter' not in kwargs else kwargs['iter']
     p = 0.15 if 'p' not in kwargs else kwargs['p']
     N = len(link_graph)
-    damping = 1 - p
+    follow_p = 1 - p
     prior = None
 
     if 'prior' not in kwargs or kwargs['prior'] == 'uniform':
@@ -287,11 +250,12 @@ def page_rank(link_graph, q, D, **kwargs):
 
                 for link in link_graph[doc]:
                     cumulative_post += (result_graph[link] / link_count[doc]) 
-                iter_graph[doc] = prior + damping * cumulative_post 
+                iter_graph[doc] = prior + follow_p * cumulative_post 
 
             result_graph = iter_graph
 
     elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
+
         ranked_dic = ranking_page_rank(topics[q], len(link_graph), D, **kwargs)
         prior_dic = {}
 
@@ -322,7 +286,7 @@ def page_rank(link_graph, q, D, **kwargs):
                     cumulative_prior += prior_dic[link]
                     cumulative_post += ((result_graph[link] * link_graph[link][doc]) / link_weighted_count[doc]) 
 
-                iter_graph[doc] = p*cumulative_prior + damping * cumulative_post 
+                iter_graph[doc] = p * cumulative_prior + follow_p * cumulative_post 
 
             result_graph = iter_graph
 
@@ -353,7 +317,7 @@ def page_rank(link_graph, q, D, **kwargs):
 # -------------------------------------------------------------------------------------------------------
 def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     #link_graph = build_graph(D, sim, theta, **kwargs)
-    link_graph = read_from_file('judged_docs_link_graph_030')
+    link_graph = read_from_file('graph_ranking/judged_docs_link_graph_030')
 
     ranked_graph = page_rank(link_graph, q, D, **kwargs)
 
@@ -361,7 +325,7 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     sim_method = sim_method_helper(sim)
 
     #tdidf_info = tfidf_process(process_collection(D, False), **kwargs)
-    tdidf_info = tfidf_process(read_from_file('judged_docs_processed'), **kwargs)
+    tdidf_info = tfidf_process(read_from_file('collections_processed/Dtest_judged_collection_processed'), **kwargs)
     vectorizer = tdidf_info[0]
     doc_keys = tdidf_info[1]
     doc_vectors = tdidf_info[2]
@@ -370,7 +334,10 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
-    # Rebalances similarity based on page rank
+
+    ranked_graph = normalize_dic(ranked_graph, norm_method='zscore')
+    sim_dic = normalize_dic(sim_dic, norm_method='zscore')
+    
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]
 
@@ -393,8 +360,12 @@ def main():
     topics = get_topics('material/')
     #D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    #print(build_graph(None, 'cosine', 0.30))
-    print(undirected_page_rank(150, None, 5, 'cosine', 0.3, prior='uniform'))
+    graph = build_graph(None, 'cosine', 0.50)
+    print(graph)
+    write_to_file(graph, 'graph_ranking/judged_docs_link_graph_050')
+
+    #graph = undirected_page_rank(150, None, 5, 'cosine', 0.3, prior='uniform')
+    #print(graph)
 
     return
 
