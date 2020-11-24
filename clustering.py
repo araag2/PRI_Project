@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import nltk
+nltk.download('wordnet')
 import spacy
 import whoosh
 import shutil
@@ -223,7 +224,9 @@ def main():
     topics = get_topics('material/')
     material_dic = 'material/'
 
-    D_set = get_files_from_directory('../rcv1_test/19961001')[1]
+    #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
+    D = read_from_file('Dtrain_collection')
+    result = clustering(D)
 
     print("Hello world uwu")
 
