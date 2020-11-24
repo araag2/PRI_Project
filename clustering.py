@@ -153,7 +153,8 @@ def clustering(D, **kwargs):
     y = np.array(y, dtype=object)
 
     # trainAgglomerative
-    clustering_methods = [trainKmeans]
+    clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
+    # TODO: add more 
     clusters = [2] if 'clusters' not in kwargs else kwargs['clusters']
     distance = 'euclidean' if 'distance' not in kwargs else kwargs['distance']
     
