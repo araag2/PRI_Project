@@ -4,6 +4,7 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
+
 import os, os.path
 import re
 import sys
@@ -26,6 +27,7 @@ from whoosh.qparser import *
 from whoosh.fields import *
 from sklearn.metrics import *
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import normalize
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
 from textblob import TextBlob
@@ -349,17 +351,16 @@ def tfidf_process(doc_dic, **kwargs):
     doc_keys = list(doc_dic.keys())
     doc_list = []
 
-    #TODO: Check generator concept
     for doc in doc_keys:
         doc_list += [doc_dic[doc], ]
 
-    #TODO: Check kwargs values
     norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
     min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
     max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
     max_features = None if 'max_features' not in kwargs else kwargs['max_features']
+    stop_words = None if 'remove_stopwords' not in kwargs else kwargs['remove_stopwords']
 
-    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
+    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features, stop_words= stop_words)
     vec.fit(doc_list)
 
     doc_list_vectors = vec.transform(doc_list)
@@ -605,22 +606,38 @@ def reciprocal_rank_fusion(p, ranking_lists):
 # ------------------------------------------------------------------------------------------------
 # ranking_for_page_rank - Function that uses our ranking function to format data for page_rank
 # non-uniform priors
+#
+# Input: query - The query we are searching our index on 
+#        p - The number of top ranked documents we will return
+#        D - A document collection 
+#        **kwargs - Optional named arguments to parameterize scoring, with the following functionality (default values prefixed by *)
+#               method [*None | len ] - Chooses a method to calculate priors
+#               
+# Behaviour: Uses or original IR system or the documents lenght to calculate non-uniform priors
+#
+# Output: A dictionary with the top p entries in the form doc_id : score
 # -------------------------------------------------------------------------------------------------
 def ranking_page_rank(query, p, D, **kwargs):
-    #TODO: Indepedence from query
-    I = indexing(D, **kwargs)[0]
-    term_dic = {}
+    result_dic = {}
 
-    with I.searcher(weighting=scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)) as searcher:
-        parser = QueryParser("content", I.schema, group=OrGroup).parse(query)
-        results = searcher.search(parser, limit=p)
+    if 'prior_method' not in kwargs:
+        I = indexing(D, **kwargs)[0]
         
-        if p != None:
-            for i in range(p):
-                if i < len(results):
-                    term_dic[int(results[i].values()[1])] = results.score(i)
 
-    return term_dic
+        with I.searcher(weighting=scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)) as searcher:
+            parser = QueryParser("content", I.schema, group=OrGroup).parse(query)
+            results = searcher.search(parser, limit=p)
+
+            if p != None:
+                for i in range(p):
+                    if i < len(results):
+                        result_dic[int(results[i].values()[1])] = results.score(i)
+    
+    elif kwargs['prior_method'] == 'len':
+        processed_collection = process_collection(D, False)
+        result_dic = processed_collection 
+
+    return normalize_dic(result_dic)
 
 # ------------------------------------------------------------------------------------------------
 # ranking - Function that will query all documents in index I and rank the top p ones
@@ -943,10 +960,6 @@ def main():
     topics = get_topics(material_dic)
 
     #evaluation([120], R_set[0], [None], ranking='RRF')
-
-    print(sys.getrecursionlimit())
-    sys.setrecursionlimit(800000)
-    print(sys.getrecursionlimit())
 
     return
 

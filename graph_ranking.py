@@ -255,7 +255,6 @@ def page_rank(link_graph, q, D, **kwargs):
 
     elif 'prior' in kwargs and kwargs['prior'] == 'non-uniform':
 
-        # TODO: Check different priors
         ranked_dic = ranking_page_rank(topics[q], len(link_graph), D, **kwargs)
         prior_dic = {}
 
@@ -332,8 +331,9 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     sim_weight = 0.5 if 'sim_weight' not in kwargs else kwargs['sim_weight']
     pr_weight = 1 - sim_weight
 
-    #TODO: Normalize weights (Zscore)
-    # Rebalances similarity based on page rank
+    ranked_graph = normalize_dic(ranked_graph, norm_method='zscore')
+    sim_dic = normalize_dic(sim_dic, norm_method='zscore')
+    
     for doc in sim_dic:
         sim_dic[doc] = sim_weight * sim_dic[doc] + pr_weight * ranked_graph[doc]
 
@@ -356,8 +356,8 @@ def main():
     topics = get_topics('material/')
     D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    print(build_graph(D, 'cosine', 0.3))
-    #print(undirected_page_rank(101, D, 5, 'cosine', 0.3, prior='uniform'))
+    #print(build_graph(D, 'cosine', 0.3))
+    print(undirected_page_rank(101, D, 5, 'cosine', 0.3, prior='uniform'))
 
     return
 
