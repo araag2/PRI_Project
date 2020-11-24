@@ -43,48 +43,11 @@ from _main_ import get_judged_docs
 from _main_ import get_topics
 from _main_ import ranking_page_rank
 from _main_ import get_R_set
+from _main_ import tfidf_process
 from proj_utilities import *
 
 topics = {}
 index_id = 1
-
-# -----------------------------------------------------------------------------------------------------
-# tfidf_process - Processes our entire document collection with a tf-idf vectorizer 
-# and transforms the entire collection into tf-idf spaced vectors 
-#
-# Input: doc_dic - The entire document collection in dictionary form
-#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
-#               norm [*l2 | l1]: Method to calculate the norm of each output row
-#               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
-#               max_df [*1.0 | float | int]: Ignore the terms which have a freq higher than man_df
-#               max_features [*None | int]: 
-#
-# Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
-# Afterwards, transforms the entire document collection into vector form, allowing it to be 
-# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
-# at the previous higher level.
-#
-# Output: The tf-idf vectorizer created, a list of document keys (ids) and the entire doc
-# collection in vector form.
-# -----------------------------------------------------------------------------------------------------
-def tfidf_process(doc_dic, **kwargs):
-    doc_keys = list(doc_dic.keys())
-    doc_list = []
-
-    for doc in doc_keys:
-        doc_list += [doc_dic[doc], ]
-
-    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
-    min_df = 1 if 'min_df' not in kwargs else kwargs['min_df']
-    max_df = 1.0 if 'max_df' not in kwargs else kwargs['max_df']
-    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-
-    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
-    vec.fit(doc_list)
-
-    doc_list_vectors = vec.transform(doc_list)
-
-    return [vec, doc_keys, doc_list_vectors]
 
 # --------------------------------------------------------------------------------
 # trainsKmeans - trains the KMeans algorithm
