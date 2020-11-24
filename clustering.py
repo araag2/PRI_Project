@@ -9,7 +9,6 @@ import re
 import sys
 import time
 import nltk
-nltk.download('wordnet')
 import spacy
 import whoosh
 import shutil
@@ -65,23 +64,21 @@ index_id = 1
 # --------------------------------------------------------------------------------
 def trainKmeans(vec_D, y, clusters, distance):
 
-    silhouettes = []
-    rands = []
-    vs = [] 
-
+    best_result = [None, None, 0]
     for i in clusters:
         clustering_kmeans = KMeans(n_clusters=i).fit(vec_D)
         labels_kmeans = clustering_kmeans.labels_
 
-        silhouettes.append(silhouette_score(vec_D, labels_kmeans, metric=distance))
-        rands.append(adjusted_rand_score(y, labels_kmeans))
-        vs.append(v_measure_score(y, labels_kmeans))
+        sil_score = silhouette_score(vec_D, labels_kmeans, metric=distance)
+        rands_score = adjusted_rand_score(y, labels_kmeans)
+        vs_score = v_measure_score(y, labels_kmeans)
 
-    best_cluster = clusters[np.argmax(rands)]
-    clustering_kmeans = KMeans(n_clusters=best_cluster).fit(vec_D)
-    labels_kmeans = clustering_kmeans.labels_
+        score_mean = (sil_score + rands_score + vs_score) / 3
 
-    return [best_cluster, labels_kmeans, np.max(rands)]
+        if score_mean > best_result[2]:
+            best_result = [clustering_kmeans, labels_kmeans, score_mean]
+
+    return best_result
 
 # --------------------------------------------------------------------------------
 # trainsAgglomerative - trains the Agglomerative Clustering algorithm
@@ -99,23 +96,22 @@ def trainKmeans(vec_D, y, clusters, distance):
 # --------------------------------------------------------------------------------
 def trainAgglomerative(vec_D, y, clusters, distance):
 
-    silhouettes = []
-    rands = []
-    vs = [] 
-
+    vec_D = vec_D.toarray()
+    best_result = [None, None, 0]
     for i in clusters:
         clustering_agg = AgglomerativeClustering(n_clusters=i).fit(vec_D)
         labels_agg = clustering_agg.labels_
 
-        silhouettes.append(silhouette_score(vec_D, labels_agg, metric=distance))
-        rands.append(adjusted_rand_score(y, labels_agg))
-        vs.append(v_measure_score(y, labels_agg))
+        sil_score = silhouette_score(vec_D, labels_agg, metric=distance)
+        rands_score = adjusted_rand_score(y, labels_agg)
+        vs_score = v_measure_score(y, labels_agg)
 
-    best_cluster = clusters[np.argmax(rands)]
-    clustering_agg = AgglomerativeClustering(n_clusters=best_cluster).fit(vec_D)
-    labels_agg = clustering_agg.labels_
+        score_mean = (sil_score + rands_score + vs_score) / 3
 
-    return [best_cluster, labels_agg, np.max(rands)]
+        if score_mean > best_result[2]:
+            best_result = [clustering_kmeans, labels_agg, score_mean]
+
+    return best_result
 
 # ----------------------------------------------------------------------------------------------------
 # Clustering: Applies Clustering, a unsupervised learning technique to classify 
@@ -138,10 +134,10 @@ def trainAgglomerative(vec_D, y, clusters, distance):
 # centroid and the set of document/topic ids which comprise it
 # ----------------------------------------------------------------------------------------------------
 def clustering(D, **kwargs):
-    doc_dic = process_collection(D, False, **kwargs)
+    #doc_dic = process_collection(D, False, **kwargs)
+    doc_dic = read_from_file('collections_processed/Dtrain_collection_processed')
 
     tfidf_vec_info = tfidf_process(doc_dic, **kwargs)
-
     vectorizer = tfidf_vec_info[0]
     doc_keys = tfidf_vec_info[1]
     doc_vectors = tfidf_vec_info[2]
@@ -149,20 +145,32 @@ def clustering(D, **kwargs):
     r_set = get_R_set('material/',index='doc_id')[1]
     y = []
 
-    for key in doc_keys:
-        for r in r_set[key]:
-            y.append('{}_{}'.format(r, r_set[key][r]))
+    #TODO: if documents not topics and topics case
+    for i in range(len(doc_keys)):
+        y.append([])
+        for r in r_set[doc_keys[i]]:
+            y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
+    y = np.array(y, dtype=object)
 
-    clusters = [2, 5, 10, 25, 50] if 'clusters' not in kwargs else kwargs['clusters']
+    #print('Doc dic has len:{}'.format(len(doc_dic)))
+    #print('r_set has len:{}'.format(len(r_set)))
+    #print('doc_keys has len:{}'.format(len(doc_keys)))
+    #print('doc_vectors has len:{}'.format(doc_vectors.getnnz()))
+    #print('y has len:{}'.format(len(y)))
+
+    clusters = [2] if 'clusters' not in kwargs else kwargs['clusters']
     distance = 'euclidean' if 'distance' not in kwargs else kwargs['distance']
     best_KM = trainKmeans(doc_vectors, y, clusters, distance)
     best_AC = trainAgglomerative(doc_vectors, y, clusters, distance)
+
+    print(best_KM)
+    print(best_AC)
 
     if best_KM[2] < best_AC[2]:
         best = best_AC
     else:
         best = best_KM
-        centroids = best.cluster_centers_
+        centroids = best.cluster_centers
 
     result = []
     i = 0
@@ -188,9 +196,11 @@ def main():
     material_dic = 'material/'
 
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
-    D = read_from_file('Dtrain_collection')
-    result = clustering(D)
+    #D = read_from_file('Dtrain_collection')
+    
+    result = clustering(None)
+    print(result)
 
-    print("Hello world uwu")
+    #print("Hello world uwu")
 
 main()
