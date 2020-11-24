@@ -76,7 +76,7 @@ def trainKmeans(vec_D, y, clusters, distance):
         score_mean = (sil_score + rands_score + vs_score) / 3
 
         if score_mean > best_result[2]:
-            best_result = [clustering_kmeans, labels_kmeans, score_mean]
+            best_result = [clustering_kmeans, labels_kmeans, score_mean]  
 
     return best_result
 
@@ -109,7 +109,7 @@ def trainAgglomerative(vec_D, y, clusters, distance):
         score_mean = (sil_score + rands_score + vs_score) / 3
 
         if score_mean > best_result[2]:
-            best_result = [clustering_kmeans, labels_agg, score_mean]
+            best_result = [clustering_agg, labels_agg, score_mean]
 
     return best_result
 
@@ -137,8 +137,8 @@ def clustering(D, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
     doc_dic = read_from_file('collections_processed/Dtrain_collection_processed')
 
+
     tfidf_vec_info = tfidf_process(doc_dic, **kwargs)
-    vectorizer = tfidf_vec_info[0]
     doc_keys = tfidf_vec_info[1]
     doc_vectors = tfidf_vec_info[2]
 
@@ -152,38 +152,28 @@ def clustering(D, **kwargs):
             y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
     y = np.array(y, dtype=object)
 
-    #print('Doc dic has len:{}'.format(len(doc_dic)))
-    #print('r_set has len:{}'.format(len(r_set)))
-    #print('doc_keys has len:{}'.format(len(doc_keys)))
-    #print('doc_vectors has len:{}'.format(doc_vectors.getnnz()))
-    #print('y has len:{}'.format(len(y)))
-
+    # trainAgglomerative
+    clustering_methods = [trainKmeans]
     clusters = [2] if 'clusters' not in kwargs else kwargs['clusters']
     distance = 'euclidean' if 'distance' not in kwargs else kwargs['distance']
-    best_KM = trainKmeans(doc_vectors, y, clusters, distance)
-    best_AC = trainAgglomerative(doc_vectors, y, clusters, distance)
+    
+    best_clusters = [None, None, 0]
+    for method in clustering_methods:
+        clustering = method(doc_vectors, y, clusters, distance)
 
-    print(best_KM)
-    print(best_AC)
+        if clustering[2] > best_clusters[2]:
+            best_clusters = clustering
 
-    if best_KM[2] < best_AC[2]:
-        best = best_AC
-    else:
-        best = best_KM
-        centroids = best.cluster_centers
+    centroids = best_clusters[0].cluster_centers_
+    doc_labels = best_clusters[1]
 
     result = []
-    i = 0
-    while i < best[0]:
-        id_set = []
-        labels = best[1]
-        j = 0
-        while labels[j] == labels[j+1]:
-            id_set += str(doc_keys[j])
-            j+=1
-        id_set += str(doc_keys[j])
-        result.append((centroids[i],id_set))
-        i += 1
+    for i in range(len(centroids)):
+        entry = (centroids[i], [])
+        result.append(entry)
+
+    for i in range(len(doc_keys)):
+        result[doc_labels[i]][1].append(doc_keys[i]) 
 
     return result
 
