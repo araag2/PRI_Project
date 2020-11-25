@@ -5,29 +5,14 @@
 # 86417 - Francisco Rosa
 # --------------------------------
 
-import os, os.path
-import re
-import sys
-import time
 import nltk
-import spacy
-import whoosh
-import shutil
 import sklearn
 import math
 import numpy as np
-from copy import deepcopy
-from heapq import nlargest 
-from bs4 import BeautifulSoup
-from whoosh import index
-from whoosh import scoring
 from sklearn.metrics import *
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.cluster import *
-from nltk.corpus import stopwords
-from nltk import WordNetLemmatizer
 
 # File imports
 
@@ -37,8 +22,6 @@ from data_set_treatment import get_topics
 from data_set_treatment import get_R_set
 
 topics = {}
-index_id = 1
-
 # --------------------------------------------------------------------------------
 # trainsKmeans - trains the KMeans algorithm
 #
@@ -174,16 +157,14 @@ def clustering(D, **kwargs):
 # --------------------------------------------------------------------------------
 def main():
     global topics
-    topics = get_topics('material/')
     material_dic = 'material/'
-
+    topics = get_topics(material_dic)
+    
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
     D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
     print(read_from_file('topics_processed'))
 
     result = clustering(D)
     print(result)
-
-    #print("Hello world uwu")
 
 main()

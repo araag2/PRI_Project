@@ -4,32 +4,21 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
-import os, os.path
 import re
-import sys
-import time
 import nltk
 import spacy
 import whoosh
 import shutil
 import sklearn
 import math
-import numpy as np
 import matplotlib as mpl 
 import matplotlib.pyplot as plt
 from heapq import nlargest 
-from bs4 import BeautifulSoup
-from lxml import etree
 from whoosh import index
 from whoosh import scoring
 from whoosh.qparser import *
 from whoosh.fields import *
 from sklearn.metrics import *
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import normalize
-from nltk.corpus import stopwords
-from nltk import WordNetLemmatizer
-from textblob import TextBlob
 
 # File imports
 from data_set_treatment import *
@@ -456,7 +445,6 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 
     results_ranked = {}
     results_boolean = {}
-    results_page_rank = {}
     k_range = [1,2,4,6,8,10] if 'k_range' not in kwargs else kwargs['k_range']
     p_range = [100,200,300,400,500, None] if 'p_range' not in kwargs else kwargs['p_range']
 

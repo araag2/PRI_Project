@@ -19,7 +19,6 @@ import numpy as np
 from scipy import stats
 from bs4 import BeautifulSoup
 from whoosh import index
-from sklearn.metrics import *
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 from nltk.corpus import stopwords

@@ -5,33 +5,11 @@
 # 86417 - Francisco Rosa
 # --------------------------------
 
-import os, os.path
-import re
-import sys
-import time
 import nltk
-import spacy
-import whoosh
-import shutil
 import sklearn
 import math
 import numpy as np
-import matplotlib as mpl 
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from heapq import nlargest 
-from bs4 import BeautifulSoup
-from lxml import etree
-from whoosh import index
-from whoosh import scoring
 from sklearn.metrics import *
-from nltk.corpus import stopwords
-from nltk import WordNetLemmatizer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.metrics.pairwise import euclidean_distances
-from sklearn.metrics.pairwise import manhattan_distances
-from textblob import TextBlob
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import Perceptron
