@@ -42,6 +42,10 @@ from base_IRsystem import process_collection
 from base_IRsystem import get_judged_docs
 from base_IRsystem import get_topics
 from base_IRsystem import ranking_page_rank
+from base_IRsystem import evaluate_ranked_query
+from base_IRsystem import find_R_test_labels
+from base_IRsystem import find_ranked_query_labels
+from base_IRsystem import get_R_set
 from proj_utilities import *
 
 #Global variables
@@ -352,17 +356,70 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
 
     return result
 
+
+
+# -------------------------------------------------------------------------------------------------
+# display_results_page_rank - Auxiliary function to display calculated statistical data
+# -------------------------------------------------------------------------------------------------
+def display_results_page_rank(q, results_page_rank):
+    print("\nPage Rank Search:")
+    for theta in results_page_rank:
+        result_str= ''
+        for m in results_page_rank[theta]:
+            result_str += '{} = {}, '.format(m, round(results_page_rank[theta][m],4)) 
+        print("For theta={}: {}".format(theta, result_str[:-2]))
+
+    return
+
+# -------------------------------------------------------------------------------------------------------
+# evaluation - Function that fully evaluates our IR model, providing full statiscal analysis for several
+# theta values across multiple topics
+#
+# Input: Q_test - The set of topics we will evaluate the perform of our IR model on
+#        R_test - The topic labels we are looking for
+#        D_test - Our test set in collection form
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               theta_range [list of floats or None | *[100,200,300,400,500]] - List of theta values our model will test
+#               sim_method [*cosine | eucledian | manhattan] - Sim method our page rank graph will use
+#
+# Behaviour: The function provides full statistics for every topic in Q_test, using R_test and D_test.
+# For each theta in theta_range it will use undirected_page_rank() to rank the top p documents.
+#
+# Output: Full statistical analysis for the provided input args
+# -----------------------------------------------------------------------------------------------------
+def evaluation(Q_test, R_test, D_test, **kwargs):
+
+    results_page_rank = {}
+    theta_range = [0.20, 0.25, 0.30, 0.35, 0.40] if 'theta_range' not in kwargs else kwargs['theta_range']
+    sim_method = 'cosine' if 'sim_method' not in kwargs else kwargs['sim_method']
+
+    for q in Q_test:
+        r_labels = find_R_test_labels(R_test[q])
+
+        for theta in theta_range:
+            page_rank_docs = undirected_page_rank(q, D_test, 100, sim_method, theta, **kwargs)
+            ranked_labels = find_ranked_query_labels(page_rank_docs, r_labels)
+
+            results_page_rank[theta] = evaluate_ranked_query(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
+            
+        display_results_page_rank(q, results_page_rank)
+        
+    return
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
 def main():
-    global topics 
+    global topics
+    material_dic = 'material/'
+    R_set = get_R_set(material_dic) 
     topics = get_topics('material/')
+    evaluation([120], R_set[0], [None], ranking='RRF')
+
     #D = get_files_from_directory('../rcv1_test/19960820/')[1]
 
-    graph = build_graph(None, 'cosine', 0.50)
-    print(graph)
-    write_to_file(graph, 'graph_ranking/judged_docs_link_graph_050')
+    #graph = build_graph(None, 'cosine', 0.50)
+    #print(graph)
+    #write_to_file(graph, 'graph_ranking/judged_docs_link_graph_050')
 
     #graph = undirected_page_rank(150, None, 5, 'cosine', 0.3, prior='uniform')
     #print(graph)
