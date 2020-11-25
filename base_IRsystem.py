@@ -464,6 +464,7 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 
             results_boolean[k] = evaluate_boolean_query(q, query_labels[0][:, 1], query_labels[1][:, 1], **kwargs)
 
+    display_results_per_q(q, results_ranked, results_boolean)
     return
 
 # --------------------------------------------------------------------------------------------

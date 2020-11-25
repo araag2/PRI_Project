@@ -12,13 +12,18 @@ import numpy as np
 from sklearn.metrics import *
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.linear_model import Perceptron
 from sklearn.svm import LinearSVC
+from rank_bm25 import BM25Okapi
 
 # File imports
 
 from file_treatment import read_from_file
-from data_set_treatment import tfidf_process
 from data_set_treatment import get_R_set
 from data_set_treatment import find_R_test_labels
 from data_set_treatment import get_topics
@@ -31,6 +36,66 @@ r_train = {}
 r_test = {}
 topic_vectorizers = {}
 
+# -----------------------------------------------------------------------------------------------------
+# create_vectorizer - Processes our entire document collection with a tf-idf vectorizer 
+# and transforms the entire collection into tf-idf spaced vectors 
+#
+# Input: doc_dic - The entire document collection in dictionary form
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               norm [*l2 | l1]: Method to calculate the norm of each output row
+#               min_df [*1 | float | int]: Ignore the terms which have a freq lower than min_df
+#               max_df [*1.0 | float | int]: Ignore the terms which have a freq higher than man_df
+#               max_features [*None | int]: 
+#
+# Behaviour: Creates a tf-idf vectorizer and fits the entire document collection into it. 
+# Afterwards, transforms the entire document collection into vector form, allowing it to be 
+# directly used to calculate similarities. It also converts structures into to an easy form to manipulate 
+# at the previous higher level.
+#
+# Output: The created Vectorizer and the entire doc collection in vector form.
+# -----------------------------------------------------------------------------------------------------
+def create_vectorizer(doc_dic, feature_space, **kwargs):
+    doc_keys = list(doc_dic.keys())
+    doc_list = []
+
+    for doc in doc_keys:
+        doc_list.append(doc_dic[doc])
+
+    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
+    min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
+    max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
+    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
+    stop_words = None if 'remove_stopwords' not in kwargs else kwargs['remove_stopwords']
+    vec = None
+    doc_list_vectors = None
+
+    if feature_space == 'tf':
+        vec = CountVectorizer(min_df=min_df, max_df=max_df, max_features=max_features, stop_words= stop_words)
+        vec.fit(doc_list)
+        vec.transform(doc_list)
+        
+    elif feature_space == 'idf':
+        vec = []
+        vec.append(CountVectorizer(min_df=min_df, max_df=max_df, max_features=max_features, stop_words= stop_words))
+        aux_vectors = vec[0].fit_transform(doc_list)
+
+        vec.append(TfidfTransformer(smooth_idf=True, use_idf=True)) 
+        doc_list_vectors = vec[1].fit_transform(aux_vectors)
+
+    elif feature_space == 'tf-idf':
+        vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features, stop_words= stop_words)
+
+    #TODO
+    elif feature_space == 'bm25':
+        return
+
+    if type(vec) != list:
+        vec.fit(doc_list)
+        doc_list_vectors = vec.transform(doc_list)
+
+    return [vec, doc_list_vectors]
+    
+# --------------------------------------------------------------------------------------------------------------------------------------
 # training 
 #
 # Input: q - topic document
@@ -42,11 +107,12 @@ topic_vectorizers = {}
 # proper preprocessing, classifier’s selection and hyperparameterization
 #    
 # Output: q-conditional classification model
+# --------------------------------------------------------------------------------------------------------------------------------------
 
 def training(q, d_train, r_train, **kwargs):
     global topic_vectorizers
 
-    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier}
+    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'randomforest': RandomForestClassifier, 'mlp': MLPClassifier}
     classifier = classifiers['multinomialnb']() if 'classifier' not in kwargs else classifiers[kwargs['classifier']]()
 
     r_labels = find_R_test_labels(r_train[q])
@@ -55,15 +121,17 @@ def training(q, d_train, r_train, **kwargs):
     for doc in r_labels:
         subset_dtrain[doc] = d_train[doc]
 
-    vec_results = tfidf_process(subset_dtrain, **kwargs)
+    vec_results = create_vectorizer(subset_dtrain, 'idf', **kwargs)
     topic_vectorizers[q] = vec_results[0]
-    d_train_vec = vec_results[2]
+    d_train_vec = vec_results[1]
     
     r_labels = list(r_labels.values())
+    
     classifier.fit(X=d_train_vec, y=r_labels)
 
     return classifier
 
+# --------------------------------------------------------------------------------------------------------------------------------------
 # classify
 # 
 # Input: d - document
@@ -74,11 +142,32 @@ def training(q, d_train, r_train, **kwargs):
 #
 # Output: probabilistic classification output on the relevance of document d to the
 # topic t
+# --------------------------------------------------------------------------------------------------------------------------------------
 
 def classify(d, q, M, **kwargs):
-    vec = topic_vectorizers[q].transform(d)
+    vec = None
+    vectorizers = topic_vectorizers[q]
+
+    if type(vectorizers) != list:
+        vec = vectorizers.transform(d)
+    else:
+        vec = vectorizers[1].transform(vectorizers[0].transform(d))
+
     return M.predict_proba(vec)
 
+# -------------------------------------------------------------------------------------------------
+# display_results - Auxiliary function to display calculated statistical data
+# -------------------------------------------------------------------------------------------------
+def display_results(q, results):
+    print("Result for search on Topic {}".format(q))
+    result_str= ''
+    for m in results:
+        result_str += '{} = {}, '.format(m, round(results[m],4)) 
+    print("{}\n".format(result_str[:-2]))
+
+    return
+
+# --------------------------------------------------------------------------------------------------------------------------------------
 # evaluate 
 # 
 # Input: q_test - subset of topics
@@ -91,14 +180,38 @@ def classify(d, q, M, **kwargs):
 #
 # Output: performance statistics regarding the underlying classification system and
 # the behavior of the aided IR system
-
+# --------------------------------------------------------------------------------------------------------------------------------------
 def evaluate(q_test, d_test, r_test, **kwargs):
 
     for q in q_test:
-        classifier = training(q, d_train, r_train)
-        for d in d_test:
-            prob = classify([d_test[d]], q, classifier)
-            print(prob)
+
+        sol_labels = []
+        o_labels = []
+        probs = {}
+
+        classifier = training(q, d_train, r_train, classifier='multinomialnb')
+
+        judged_docs = []
+        for doc_id in r_test[q]:
+            judged_docs.append(doc_id)
+        
+        for doc_id in judged_docs:
+            prob = classify([d_test[doc_id]], q, classifier)[0][1]
+            probs[doc_id] = prob
+            sol_labels.append(r_test[q][doc_id])
+            o_labels.append(1 if prob > 0.5 else 0)
+
+        results = {}
+        results['accuracy'] = accuracy_score(sol_labels, o_labels)
+        results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro', zero_division=1)
+        results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro', zero_division=1)
+        results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
+        results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
+        results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
+        results['f-beta-macro'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+
+        display_results(q, results)
+
     return
 
 # --------------------------------------------------------------------------------
@@ -110,12 +223,6 @@ def main():
     global d_test
     global r_train
     global r_test
-
-    '''
-    'collections_processed/Dtest_judged_collection_processed' -> Dtest judged docs
-    'collections_processed/Dtrain_judged_collection_processed' -> Dtrain judged docs
-    'collections_processed/Dtrain_collection_processed' -> Dtrain completo
-    '''
 
     d_test = read_from_file('collections_processed/Dtest_judged_collection_processed')
     d_train = read_from_file('collections_processed/Dtrain_judged_collection_processed')
