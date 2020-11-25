@@ -841,9 +841,9 @@ def evaluate_boolean_query(topic, o_labels, sol_labels, **kwargs):
     return results
 
 # -------------------------------------------------------------------------------------------------
-# display_results - Auxiliary function to display calculated statistical data
+# display_results_per_q - Auxiliary function to display calculated statistical data
 # -------------------------------------------------------------------------------------------------
-def display_results_per_q(q, results_ranked, results_boolean, results_page_rank):
+def display_results_per_q(q, results_ranked, results_boolean):
     print("Result for search on Topic {}".format(q))
     print("\nRanked Search:")
     for p in results_ranked:
@@ -861,27 +861,18 @@ def display_results_per_q(q, results_ranked, results_boolean, results_page_rank)
 
         print("Result for search on Topic {}".format(q))
 
-    print("\nPage Rank Search:")
-    for theta in results_page_rank:
-        result_str= ''
-        for m in results_page_rank[theta]:
-            result_str += '{} = {}, '.format(m, round(results_page_rank[p][m],4)) 
-        print("For theta={}: {}".format(p, result_str[:-2]))
-
     return
 # -------------------------------------------------------------------------------------------------------
 # evaluation - Function that fully evaluates our IR model, providing full statiscal analysis for several
 # p and k values across multiple ranges and topics
 #
 # Input: Q_test - The set of topics we will evaluate the perform of our IR model on
-#        R_test - The number of top ranked documents we will return
-#        D_test - The Index object in which we will perform our search
+#        R_test - The topic labels we are looking for
+#        D_test - Our test set in collection form
 #        **kwargs - The additional args in this function also refer to the additional args in indexing(),
 #        ranking() and boolean_query(), for which documentation is provided above. Other than that, we have:
 #               k_range [list of ints | *[1,2,4,6,8,10]] - List of k values our model will test
 #               p_range [list of ints or None | *[100,200,300,400,500]] - List of p values our model will test
-#               theta_range [list of floats or None | *[100,200,300,400,500]] - List of theta values our model will test
-#               sim_method [*cosine | eucledian | manhattan] - Sim method our page rank graph will use
 #               curves [True | *False] - Display the precision/recall curves
 #
 # Behaviour: The function provides full statistics for every topic in Q_test, using R_test and D_test
@@ -893,7 +884,7 @@ def display_results_per_q(q, results_ranked, results_boolean, results_page_rank)
 # -----------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
     # Standard index execution
-    #I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
+    I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
 
     #I = indexing(D_test, **kwargs)[0]
 
@@ -902,13 +893,11 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
     results_page_rank = {}
     k_range = [1,2,4,6,8,10] if 'k_range' not in kwargs else kwargs['k_range']
     p_range = [100,200,300,400,500, None] if 'p_range' not in kwargs else kwargs['p_range']
-    theta_range = [0.20, 0.25, 0.30, 0.35, 0.40] if 'theta_range' not in kwargs else kwargs['theta_range']
-    sim_method = 'cosine' if 'sim_method' not in kwargs else kwargs['sim_method']
+
 
     for q in Q_test:
         r_labels = find_R_test_labels(R_test[q])
 
-        '''
         for p in p_range:
             score_docs = ranking(q, p, I, **kwargs)
             ranked_labels = find_ranked_query_labels(score_docs, r_labels)
@@ -920,18 +909,7 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
             query_labels = find_boolean_query_labels(boolean_docs, r_labels)
 
             results_boolean[k] = evaluate_boolean_query(q, query_labels[0][:, 1], query_labels[1][:, 1], **kwargs)
-        '''
 
-        '''
-        for theta in theta_range:
-            page_rank_docs = undirected_page_rank(q, D_test, 100, sim_method, theta, **kwargs)
-            ranked_labels = find_ranked_query_labels(page_rank_docs, r_labels)
-
-            results_page_rank[theta] = evaluate_ranked_query(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
-            
-        display_results_per_q(q, results_ranked, results_boolean, results_page_rank)
-        '''
-        
     return
 
 # --------------------------------------------------------------------------------------------
@@ -977,8 +955,9 @@ def main():
     R_set = get_R_set(material_dic)
     topics = get_topics(material_dic)
 
-    evaluation([120], R_set[0], [None], ranking='RRF')
+    #evaluation([120], R_set[0], [None], ranking='RRF')
+    print(topics)
 
     return
 
-main()
+#main()
