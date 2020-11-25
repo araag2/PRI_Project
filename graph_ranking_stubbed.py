@@ -397,7 +397,7 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
         r_labels = find_R_test_labels(R_test[q])
 
         for theta in theta_range:
-            page_rank_docs = undirected_page_rank(q, D_test, 100, sim_method, theta, **kwargs)
+            page_rank_docs = undirected_page_rank(q, D_test, 5, sim_method, theta, **kwargs)
             ranked_labels = find_ranked_query_labels(page_rank_docs, r_labels)
 
             results_page_rank[theta] = evaluate_ranked_query(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
