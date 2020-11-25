@@ -4,6 +4,7 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
+
 import os, os.path
 import re
 import sys
@@ -23,8 +24,6 @@ from bs4 import BeautifulSoup
 from lxml import etree
 from whoosh import index
 from whoosh import scoring
-from whoosh.qparser import *
-from whoosh.fields import *
 from sklearn.metrics import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
@@ -39,14 +38,12 @@ from sklearn.linear_model import Perceptron
 from sklearn.svm import LinearSVC
 
 # File imports
-from _main_ import get_files_from_directory
-from _main_ import process_collection
-from _main_ import get_judged_docs
-from _main_ import get_topics
-from _main_ import ranking_page_rank
-from _main_ import find_R_test_labels
-from _main_ import tfidf_process
-from proj_utilities import *
+
+from file_treatment import read_from_file
+from data_set_treatment import tfidf_process
+from data_set_treatment import get_R_set
+from data_set_treatment import find_R_test_labels
+from data_set_treatment import get_topics
 
 #Global variables
 topics = {}
@@ -54,6 +51,7 @@ d_train = {}
 d_test = {}
 r_train = {}
 r_test = {}
+topic_vectorizers = {}
 
 # training 
 #
@@ -68,22 +66,22 @@ r_test = {}
 # Output: q-conditional classification model
 
 def training(q, d_train, r_train, **kwargs):
-    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'perceptron': Perceptron, 'linearsvc' :LinearSVC}
+    global topic_vectorizers
+
+    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier}
+    classifier = classifiers['multinomialnb']() if 'classifier' not in kwargs else classifiers[kwargs['classifier']]()
+
     r_labels = find_R_test_labels(r_train[q])
+
+    subset_dtrain = {}
+    for doc in r_labels:
+        subset_dtrain[doc] = d_train[doc]
+
+    vec_results = tfidf_process(subset_dtrain, **kwargs)
+    topic_vectorizers[q] = vec_results[0]
+    d_train_vec = vec_results[2]
     
-    #TODO: replace with tfidf_process
-
-    norm = 'l2' if 'norm' not in kwargs else kwargs['norm']
-    min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
-    max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
-    max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-    classifier = MultinomialNB() if 'classifier' not in kwargs else kwargs['classifier']
-
-    vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features)
-
-    d_train_vec = vec.fit(d_train)
-    #r_labels = vec.fit(r_labels)
-
+    r_labels = list(r_labels.values())
     classifier.fit(X=d_train_vec, y=r_labels)
 
     return classifier
@@ -100,9 +98,7 @@ def training(q, d_train, r_train, **kwargs):
 # topic t
 
 def classify(d, q, M, **kwargs):
-
-    vec = tfidf_process({'doc':d})[0]
-
+    vec = topic_vectorizers[q].transform(d)
     return M.predict_proba(vec)
 
 # evaluate 
@@ -123,8 +119,8 @@ def evaluate(q_test, d_test, r_test, **kwargs):
     for q in q_test:
         classifier = training(q, d_train, r_train)
         for d in d_test:
-            prob = classify(d, q, classifier)
-
+            prob = classify([d_test[d]], q, classifier)
+            print(prob)
     return
 
 # --------------------------------------------------------------------------------
@@ -137,19 +133,24 @@ def main():
     global r_train
     global r_test
 
-    d_set = [None, None]
-    d_test = d_set[0]
-    d_train = d_set[1]
+    '''
+    'collections_processed/Dtest_judged_collection_processed' -> Dtest judged docs
+    'collections_processed/Dtrain_judged_collection_processed' -> Dtrain judged docs
+    'collections_processed/Dtrain_collection_processed' -> Dtrain completo
+    '''
 
-    r_set = [None, None]
+    d_test = read_from_file('collections_processed/Dtest_judged_collection_processed')
+    d_train = read_from_file('collections_processed/Dtrain_judged_collection_processed')
+
+    r_set = get_R_set('material/')[0]
+
     r_test = r_set[0]
     r_train = r_set[1]
 
-    q_test = []
+    q_test = [120,123]
 
     evaluate(q_test, d_test, r_test)
 
-    r_train = find_R_test_labels('material/')[1]
     topics = get_topics('material/')
 
     return

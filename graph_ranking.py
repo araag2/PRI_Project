@@ -6,46 +6,32 @@
 # --------------------------------
 
 import os, os.path
-import re
 import sys
-import time
 import nltk
-import spacy
-import whoosh
-import shutil
 import sklearn
 import math
-import numpy as np
 import matplotlib as mpl 
 import matplotlib.pyplot as plt
-from copy import deepcopy
-from heapq import nlargest 
-from bs4 import BeautifulSoup
-from lxml import etree
-from whoosh import index
 from whoosh import scoring
-from whoosh.qparser import *
-from whoosh.fields import *
+from copy import deepcopy
+from whoosh.qparser import QueryParser
+from whoosh.qparser import OrGroup
 from sklearn.metrics import *
-from nltk.corpus import stopwords
-from nltk import WordNetLemmatizer
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.metrics.pairwise import manhattan_distances
-from textblob import TextBlob
 
 # File imports
-from base_IRsystem import get_files_from_directory
-from base_IRsystem import tfidf_process
-from base_IRsystem import process_collection
-from base_IRsystem import get_judged_docs
-from base_IRsystem import get_topics
-from base_IRsystem import ranking_page_rank
-from base_IRsystem import evaluate_ranked_query
-from base_IRsystem import find_R_test_labels
-from base_IRsystem import find_ranked_query_labels
-from proj_utilities import *
+from file_treatment import get_files_from_directory
+from file_treatment import read_from_file
+from file_treatment import write_to_file
+
+from data_set_treatment import process_collection
+from data_set_treatment import tfidf_process
+from data_set_treatment import normalize_dic
+from data_set_treatment import get_topics
+from data_set_treatment import find_R_test_labels
+from data_set_treatment import find_ranked_query_labels
 
 #Global variables
 topics = {}
@@ -203,6 +189,43 @@ def build_graph(D, sim, theta, **kwargs):
 
     return graph
 
+# ------------------------------------------------------------------------------------------------
+# ranking_for_page_rank - Function that uses our ranking function to format data for page_rank
+# non-uniform priors
+#
+# Input: query - The query we are searching our index on 
+#        p - The number of top ranked documents we will return
+#        D - A document collection 
+#        **kwargs - Optional named arguments to parameterize scoring, with the following functionality (default values prefixed by *)
+#               method [*None | len ] - Chooses a method to calculate priors
+#               
+# Behaviour: Uses or original IR system or the documents lenght to calculate non-uniform priors
+#
+# Output: A dictionary with the top p entries in the form doc_id : score
+# -------------------------------------------------------------------------------------------------
+def ranking_page_rank(query, p, D, **kwargs):
+    from base_IRsystem import indexing
+    result_dic = {}
+
+    if 'prior_method' not in kwargs:
+        I = indexing(D, **kwargs)[0]
+        
+
+        with I.searcher(weighting=scoring.BM25F(B=0.75, content_B=1.0, K1=1.5)) as searcher:
+            parser = QueryParser("content", I.schema, group=OrGroup).parse(query)
+            results = searcher.search(parser, limit=p)
+
+            if p != None:
+                for i in range(p):
+                    if i < len(results):
+                        result_dic[int(results[i].values()[1])] = results.score(i)
+    
+    elif kwargs['prior_method'] == 'len':
+        processed_collection = process_collection(D, False)
+        result_dic = processed_collection 
+
+    return normalize_dic(result_dic)
+
 # ---------------------------------------------------------------------------------------------------------
 # page_rank - Function that directly uses the Page Rank algorithm with a 
 # variation for undirected graphs and uses it to calculate a score for each
@@ -352,6 +375,29 @@ def undirected_page_rank(q, D, p, sim, theta, **kwargs):
     return result
 
 # -------------------------------------------------------------------------------------------------
+# evaluate_page_rank - Auxiliary function to calculate statistical data
+# -------------------------------------------------------------------------------------------------
+def evaluate_page_rank(topic, o_labels, sol_labels, **kwargs):
+    results = {}
+
+    results['accuracy'] = accuracy_score(sol_labels, o_labels)
+    results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro', zero_division=1)
+    results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro', zero_division=1)
+    results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
+    results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
+    results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
+    results['f-beta-macro'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+    results['MAP'] = average_precision_score(sol_labels, o_labels)
+
+    if 'curves' in kwargs and kwargs['curves']:
+        precision, recall, _ = precision_recall_curve(sol_labels, o_labels)
+        PrecisionRecallDisplay(precision=precision, recall=recall).plot()
+        plt.title('Precision Recall curve for Ranked topic {}'.format(topic))
+        plt.show()
+
+    return results
+
+# -------------------------------------------------------------------------------------------------
 # display_results_page_rank - Auxiliary function to display calculated statistical data
 # -------------------------------------------------------------------------------------------------
 def display_results_page_rank(q, results_page_rank):
@@ -393,7 +439,7 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
             page_rank_docs = undirected_page_rank(q, D_test, 100, sim_method, theta, **kwargs)
             ranked_labels = find_ranked_query_labels(page_rank_docs, r_labels)
 
-            results_page_rank[theta] = evaluate_ranked_query(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
+            results_page_rank[theta] = evaluate_page_rank(q, ranked_labels[0][:, 1],ranked_labels[1][:, 1], **kwargs)
             
         display_results_page_rank(q, results_page_rank)
         
@@ -405,7 +451,7 @@ def evaluation(Q_test, R_test, D_test, **kwargs):
 def main():
     global topics 
     topics = get_topics('material/')
-    D = get_files_from_directory('../rcv1_test/19960820/')[1]
+    D = get_files_from_directory('../rcv1_test/19960820/', None)[1]
 
     #print(build_graph(D, 'cosine', 0.3))
     print(undirected_page_rank(101, D, 5, 'cosine', 0.3, prior='uniform'))

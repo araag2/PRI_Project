@@ -4,6 +4,7 @@
 # 86389 - Artur Guimarães
 # 86417 - Francisco Rosa
 # --------------------------------
+
 import os, os.path
 import re
 import sys
@@ -15,17 +16,11 @@ import shutil
 import sklearn
 import math
 import numpy as np
-#import pandas as pd
-#import matplotlib as mpl 
-#import matplotlib.pyplot as plt
 from copy import deepcopy
 from heapq import nlargest 
 from bs4 import BeautifulSoup
-#from lxml import etree
 from whoosh import index
 from whoosh import scoring
-from whoosh.qparser import *
-from whoosh.fields import *
 from sklearn.metrics import *
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -33,17 +28,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.cluster import *
 from nltk.corpus import stopwords
 from nltk import WordNetLemmatizer
-#from textblob import TextBlob
 
 # File imports
-from base_IRsystem import get_files_from_directory
-from base_IRsystem import process_collection
-from base_IRsystem import get_judged_docs
-from base_IRsystem import get_topics
-from base_IRsystem import ranking_page_rank
-from base_IRsystem import get_R_set
-from base_IRsystem import tfidf_process
-from proj_utilities import *
+
+from file_treatment import read_from_file
+from data_set_treatment import tfidf_process
+from data_set_treatment import get_topics
+from data_set_treatment import get_R_set
 
 topics = {}
 index_id = 1
@@ -142,7 +133,7 @@ def clustering(D, **kwargs):
     doc_keys = tfidf_vec_info[1]
     doc_vectors = tfidf_vec_info[2]
 
-    r_set = get_R_set('material/',index='doc_id')[1]
+    r_set = get_R_set('material/',index='doc_id')[0][1]
     y = []
 
     #TODO: if documents not topics and topics case
@@ -187,9 +178,10 @@ def main():
     material_dic = 'material/'
 
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
-    #D = read_from_file('Dtrain_collection')
-    
-    result = clustering(None)
+    D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
+    print(read_from_file('topics_processed'))
+
+    result = clustering(D)
     print(result)
 
     #print("Hello world uwu")
