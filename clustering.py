@@ -109,7 +109,7 @@ def trainAgglomerative(vec_D, y, clusters, distance):
 # ----------------------------------------------------------------------------------------------------
 def clustering(D, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
-    doc_dic = read_from_file('collections_processed/Dtrain_collection_processed')
+    doc_dic = D
 
     tfidf_vec_info = tfidf_process(doc_dic, **kwargs)
     doc_keys = tfidf_vec_info[1]
@@ -165,10 +165,12 @@ def clustering(D, **kwargs):
 # Output: ;)
 # ----------------------------------------------------------------------------------------------------
 def interpret(cluster, D, **kwargs):
+    #processed_docs = process_collection(D, False, **kwargs)
+    processed_docs = D
 
     documents = {}
     for doc_id in cluster[1]:
-        documents[doc_id] = D[doc_id]
+        documents[doc_id] = processed_docs[doc_id]
 
     doc_vectors = tfidf_process(documents, **kwargs)[2]
     distance_matrix = pairwise_distances(doc_vectors)
@@ -187,6 +189,23 @@ def interpret(cluster, D, **kwargs):
 #
 # Output: 
 # ----------------------------------------------------------------------------------------------------
+def evaluate(D, **kwargs):
+    clusters = clustering(D, **kwargs)
+    cluster_info = []
+
+    for cluster in clusters:
+        cluster_info.append(interpret(cluster, D, **kwargs))
+
+    n_clusters = len(clusters)
+
+    print("The clustering solution has k = {} clusters".format(n_clusters))
+    for i in range(n_clusters):
+        print("\nCluster {}:".format(i+1))
+        print("Centroid is {}".format(cluster_info[i][0]))
+        print("Medoid is document with id {}".format(cluster_info[i][1]))
+        print("Cluster is composed by {} documents".format(len(clusters[i][1])))
+
+    return
 
 
 # --------------------------------------------------------------------------------
@@ -201,9 +220,6 @@ def main():
     D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
     #print(read_from_file('topics_processed'))
 
-    result = clustering(D)
-    
-    for cluster in result:
-        print(interpret(cluster, D))
+    evaluate(D)
 
 main()
