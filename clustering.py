@@ -23,6 +23,33 @@ from data_set_treatment import get_R_set
 from data_set_treatment import process_collection
 
 topics = {}
+
+
+
+# --------------------------------------------------------------------------------
+# get_clustering_score() - Gets a clustering methods score based on supervised, unsupervised
+# or mixed metrics. Uses a linear combination of all results.
+# --------------------------------------------------------------------------------
+def get_clustering_score(x, labels_true, labels_pred, target):
+    unsupervised_methods = { 'sil_score' : silhouette_score, 'calin_score' : calinski_harabasz_score, 'davies_score' : davies_bouldin_score}
+
+    supervised_methods = {'rands_score' : adjusted_rand_score, 'v_score' : v_measure_score, 'complete_score' : completeness_score, 
+                          'fowlkes_score' : fowlkes_mallows_score, 'homogenity_score': homogeneity_score, 'mutual_score' : mutual_info_score}
+
+    if target == 'supervised':
+        unsupervised_methods = {}
+    elif target == 'unsupervised':
+        supervised_methods = {}
+
+    result = 0
+    for method in unsupervised_methods:
+        result += unsupervised_methods[method](x, labels_pred)
+
+    for method in supervised_methods:
+        result += supervised_methods[method](labels_true, labels_pred)
+
+    return result / (len(unsupervised_methods) + len(supervised_methods))
+
 # --------------------------------------------------------------------------------
 # trainsKmeans - trains the KMeans algorithm
 #
@@ -39,19 +66,16 @@ topics = {}
 # --------------------------------------------------------------------------------
 def trainKmeans(vec_D, y, clusters, distance):
 
+    array_D = vec_D.toarray()
     best_result = [None, None, 0]
     for i in clusters:
         clustering_kmeans = KMeans(n_clusters=i).fit(vec_D)
-        labels_kmeans = clustering_kmeans.labels_
+        labels_pred = clustering_kmeans.labels_
 
-        sil_score = silhouette_score(vec_D, labels_kmeans, metric=distance)
-        rands_score = adjusted_rand_score(y, labels_kmeans)
-        vs_score = v_measure_score(y, labels_kmeans)
-
-        score_mean = (sil_score + rands_score + vs_score) / 3
+        score_mean = get_clustering_score(array_D, y, labels_pred, None)
 
         if score_mean > best_result[2]:
-            best_result = [clustering_kmeans, labels_kmeans, score_mean]  
+            best_result = [clustering_kmeans, labels_pred, score_mean]  
 
     return best_result
 
@@ -75,16 +99,12 @@ def trainAgglomerative(vec_D, y, clusters, distance):
     best_result = [None, None, 0]
     for i in clusters:
         clustering_agg = AgglomerativeClustering(n_clusters=i).fit(vec_D)
-        labels_agg = clustering_agg.labels_
+        labels_pred = clustering_agg.labels_
 
-        sil_score = silhouette_score(vec_D, labels_agg, metric=distance)
-        rands_score = adjusted_rand_score(y, labels_agg)
-        vs_score = v_measure_score(y, labels_agg)
-
-        score_mean = (sil_score + rands_score + vs_score) / 3
+        score_mean = get_clustering_score(vec_D, y, labels_pred, 'unsupervised')
 
         if score_mean > best_result[2]:
-            best_result = [clustering_agg, labels_agg, score_mean]
+            best_result = [clustering_agg, labels_pred, score_mean]
 
     return best_result
 
@@ -130,7 +150,7 @@ def clustering(D, **kwargs):
         y = np.array(y, dtype=object)
 
     elif mode == 'topics':
-        tfidf_vec_info = tfidf_process(D, min_df = 1, **kwargs)
+        tfidf_vec_info = tfidf_process(D, min_df = 1, max_df=1.0, **kwargs)
         doc_keys = tfidf_vec_info[1]
         doc_vectors = tfidf_vec_info[2]
 
@@ -146,7 +166,7 @@ def clustering(D, **kwargs):
     # trainAgglomerative
     clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
     # TODO: add more 
-    clusters = [2] if 'clusters' not in kwargs else kwargs['clusters']
+    clusters = list(range(2,21)) if 'clusters' not in kwargs else kwargs['clusters']
     distances = ['euclidean'] if 'distance' not in kwargs else kwargs['distance']
     
     best_clusters = [None, None, 0]
@@ -188,7 +208,7 @@ def interpret(cluster, D, **kwargs):
     for doc_id in cluster[1]:
         documents[doc_id] = D[doc_id]
 
-    doc_vectors = tfidf_process(documents, **kwargs)[2]
+    doc_vectors = tfidf_process(documents, min_df = 1, max_df=1.0, **kwargs)[2]
     distance_matrix = pairwise_distances(doc_vectors)
 
     centroid = cluster[0]
@@ -225,7 +245,6 @@ def evaluate(D, **kwargs):
     elif mode == 'topics':
         doc_dic = get_topic_subset(D)
 
-    print(doc_dic)
     clusters = clustering(doc_dic, **kwargs)
     cluster_info = []
 
@@ -241,7 +260,8 @@ def evaluate(D, **kwargs):
         print("Centroid is {}".format(cluster_info[i][0]))
         print("Medoid is {} with id {}".format(name,cluster_info[i][1]))
         print("Cluster is composed by {} {}s".format(len(clusters[i][1]), name))
-
+    print("The clustering solution has k = {} clusters".format(n_clusters))
+    
     return
 
 
