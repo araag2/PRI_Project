@@ -111,7 +111,6 @@ def clustering(D, **kwargs):
     #doc_dic = process_collection(D, False, **kwargs)
     doc_dic = read_from_file('collections_processed/Dtrain_collection_processed')
 
-
     tfidf_vec_info = tfidf_process(doc_dic, **kwargs)
     doc_keys = tfidf_vec_info[1]
     doc_vectors = tfidf_vec_info[2]
@@ -139,7 +138,9 @@ def clustering(D, **kwargs):
         if clustering[2] > best_clusters[2]:
             best_clusters = clustering
 
+    print(best_clusters[0].labels_)
     centroids = best_clusters[0].cluster_centers_
+    print(centroids)
     doc_labels = best_clusters[1]
 
     result = []
@@ -152,6 +153,25 @@ def clustering(D, **kwargs):
 
     return result
 
+# ----------------------------------------------------------------------------------------------------
+# Interpret: Evaluates clusters in terms of median (centroid) and medoid criteria
+#
+# Input: cluster - A document/topic cluster
+#        D - Set of documents or topics in cluster
+#       **kwargs - Optional parameters with the following functionality (default 
+#       values prefixed by *)
+#
+# Behaviour: it's a surprise :)
+#
+# Output: ;)
+# ----------------------------------------------------------------------------------------------------
+def interpret(cluster, D, **kwargs):
+
+    centroid = cluster.cluster_centers_
+    print("hello. i have done this and nothing more. pelase accept this proof of my humility and baffoonery. have mercy on my soul. ill carry you on the report i swear")
+    return
+
+
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
 # --------------------------------------------------------------------------------
@@ -162,9 +182,9 @@ def main():
     
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
     D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
-    print(read_from_file('topics_processed'))
+    #print(read_from_file('topics_processed'))
 
     result = clustering(D)
-    print(result)
+    #print(result)
 
 main()
