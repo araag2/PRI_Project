@@ -20,6 +20,7 @@ from file_treatment import read_from_file
 from data_set_treatment import tfidf_process
 from data_set_treatment import get_topics
 from data_set_treatment import get_R_set
+from data_set_treatment import process_collection
 
 topics = {}
 # --------------------------------------------------------------------------------
@@ -108,22 +109,39 @@ def trainAgglomerative(vec_D, y, clusters, distance):
 # centroid and the set of document/topic ids which comprise it
 # ----------------------------------------------------------------------------------------------------
 def clustering(D, **kwargs):
-    #doc_dic = process_collection(D, False, **kwargs)
-    doc_dic = D
+    mode = 'docs' if 'mode' not in kwargs else kwargs['mode']
 
-    tfidf_vec_info = tfidf_process(doc_dic, **kwargs)
-    doc_keys = tfidf_vec_info[1]
-    doc_vectors = tfidf_vec_info[2]
-
-    r_set = get_R_set('material/',index='doc_id')[0][1]
+    tfidf_vec_info = None
+    doc_keys = None
+    doc_vectors = None
     y = []
 
-    #TODO: if documents not topics and topics case
-    for i in range(len(doc_keys)):
-        y.append([])
-        for r in r_set[doc_keys[i]]:
-            y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
-    y = np.array(y, dtype=object)
+    if mode == 'docs':
+        tfidf_vec_info = tfidf_process(D, **kwargs)
+        doc_keys = tfidf_vec_info[1]
+        doc_vectors = tfidf_vec_info[2]
+
+        r_set = get_R_set('material/',index='doc_id')[0][1]
+    
+        for i in range(len(doc_keys)):
+            y.append([])
+            for r in r_set[doc_keys[i]]:
+                y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
+        y = np.array(y, dtype=object)
+
+    elif mode == 'topics':
+        tfidf_vec_info = tfidf_process(D, min_df = 1, **kwargs)
+        doc_keys = tfidf_vec_info[1]
+        doc_vectors = tfidf_vec_info[2]
+
+        r_set = get_R_set('material/')[0][1]
+
+        for i in range(len(doc_keys)):
+            y.append([])
+            for r in r_set[doc_keys[i]]:
+                y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
+        y = np.array(y, dtype=object)
+
 
     # trainAgglomerative
     clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
@@ -165,12 +183,10 @@ def clustering(D, **kwargs):
 # Output: ;)
 # ----------------------------------------------------------------------------------------------------
 def interpret(cluster, D, **kwargs):
-    #processed_docs = process_collection(D, False, **kwargs)
-    processed_docs = D
 
     documents = {}
     for doc_id in cluster[1]:
-        documents[doc_id] = processed_docs[doc_id]
+        documents[doc_id] = D[doc_id]
 
     doc_vectors = tfidf_process(documents, **kwargs)[2]
     distance_matrix = pairwise_distances(doc_vectors)
@@ -179,6 +195,17 @@ def interpret(cluster, D, **kwargs):
     medoid_index = np.argmin(distance_matrix.sum(axis=0))
 
     return [centroid, cluster[1][medoid_index]]
+
+# ----------------------------------------------------------------------------------------------------
+# get_topic_subset() - Retrieves topics from the global variable topics that are contained within
+# Q 
+# ----------------------------------------------------------------------------------------------------
+def get_topic_subset(q_test):
+    result = {}
+    for topic in topics:
+        if topic in q_test:
+            result[topic] = topics[topic]
+    return result
 
 # ----------------------------------------------------------------------------------------------------
 # evaluate: 
@@ -190,20 +217,30 @@ def interpret(cluster, D, **kwargs):
 # Output: 
 # ----------------------------------------------------------------------------------------------------
 def evaluate(D, **kwargs):
-    clusters = clustering(D, **kwargs)
+    mode = 'docs' if 'mode' not in kwargs else kwargs['mode']
+    doc_dic = D
+
+    if mode == 'docs':
+        doc_dic = process_collection(D, False, **kwargs)
+    elif mode == 'topics':
+        doc_dic = get_topic_subset(D)
+
+    print(doc_dic)
+    clusters = clustering(doc_dic, **kwargs)
     cluster_info = []
 
     for cluster in clusters:
-        cluster_info.append(interpret(cluster, D, **kwargs))
+        cluster_info.append(interpret(cluster, doc_dic, **kwargs))
 
     n_clusters = len(clusters)
+    name = 'document' if mode == 'docs' else 'topic'
 
     print("The clustering solution has k = {} clusters".format(n_clusters))
     for i in range(n_clusters):
         print("\nCluster {}:".format(i+1))
         print("Centroid is {}".format(cluster_info[i][0]))
-        print("Medoid is document with id {}".format(cluster_info[i][1]))
-        print("Cluster is composed by {} documents".format(len(clusters[i][1])))
+        print("Medoid is {} with id {}".format(name,cluster_info[i][1]))
+        print("Cluster is composed by {} {}s".format(len(clusters[i][1]), name))
 
     return
 
@@ -217,9 +254,11 @@ def main():
     topics = get_topics(material_dic)
     
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
-    D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
+    #D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
+    D = list(range(101, 201, 1))
     #print(read_from_file('topics_processed'))
 
-    evaluate(D)
+    evaluate(D, mode='topics')
+
 
 main()
