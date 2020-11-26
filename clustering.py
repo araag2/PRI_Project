@@ -129,18 +129,17 @@ def clustering(D, **kwargs):
     clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
     # TODO: add more 
     clusters = [2] if 'clusters' not in kwargs else kwargs['clusters']
-    distance = 'euclidean' if 'distance' not in kwargs else kwargs['distance']
+    distances = ['euclidean'] if 'distance' not in kwargs else kwargs['distance']
     
     best_clusters = [None, None, 0]
     for method in clustering_methods:
-        clustering = method(doc_vectors, y, clusters, distance)
+        for dist in distances:
+            clustering = method(doc_vectors, y, clusters, dist)
 
-        if clustering[2] > best_clusters[2]:
-            best_clusters = clustering
+            if clustering[2] > best_clusters[2]:
+                best_clusters = clustering
 
-    print(best_clusters[0].labels_)
     centroids = best_clusters[0].cluster_centers_
-    print(centroids)
     doc_labels = best_clusters[1]
 
     result = []
@@ -154,7 +153,7 @@ def clustering(D, **kwargs):
     return result
 
 # ----------------------------------------------------------------------------------------------------
-# Interpret: Evaluates clusters in terms of median (centroid) and medoid criteria
+# interpret(): Evaluates clusters in terms of median (centroid) and medoid criteria
 #
 # Input: cluster - A document/topic cluster
 #        D - Set of documents or topics in cluster
@@ -167,9 +166,27 @@ def clustering(D, **kwargs):
 # ----------------------------------------------------------------------------------------------------
 def interpret(cluster, D, **kwargs):
 
-    centroid = cluster.cluster_centers_
-    print("hello. i have done this and nothing more. pelase accept this proof of my humility and baffoonery. have mercy on my soul. ill carry you on the report i swear")
-    return
+    documents = {}
+    for doc_id in cluster[1]:
+        documents[doc_id] = D[doc_id]
+
+    doc_vectors = tfidf_process(documents, **kwargs)[2]
+    distance_matrix = pairwise_distances(doc_vectors)
+
+    centroid = cluster[0]
+    medoid_index = np.argmin(distance_matrix.sum(axis=0))
+
+    return [centroid, cluster[1][medoid_index]]
+
+# ----------------------------------------------------------------------------------------------------
+# evaluate: 
+#
+# Input: 
+#
+# Behaviour: 
+#
+# Output: 
+# ----------------------------------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------------
@@ -185,6 +202,8 @@ def main():
     #print(read_from_file('topics_processed'))
 
     result = clustering(D)
-    #print(result)
+    
+    for cluster in result:
+        print(interpret(cluster, D))
 
 main()
