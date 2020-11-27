@@ -153,7 +153,7 @@ def classify(d, q, M, **kwargs):
     else:
         vec = vectorizers[1].transform(vectorizers[0].transform(d))
 
-    return M.predict_proba(vec)
+    return M.predict_proba(vec)[0][1]
 
 # -------------------------------------------------------------------------------------------------
 # display_results - Auxiliary function to display calculated statistical data
@@ -162,8 +162,13 @@ def display_results(q, results):
     print("Result for search on Topic {}".format(q))
     result_str= ''
     for m in results:
-        result_str += '{} = {}, '.format(m, round(results[m],4)) 
+        if m != 'ranking':
+            result_str += '{} = {}, '.format(m, round(results[m],4)) 
     print("{}\n".format(result_str[:-2]))
+  
+    if 'ranking' in results:
+        print("Top ranked documents on Topic {}".format(q))
+        print("{}".format(results['ranking']))
 
     return
 
@@ -183,36 +188,60 @@ def display_results(q, results):
 # --------------------------------------------------------------------------------------------------------------------------------------
 def evaluate(q_test, d_test, r_test, **kwargs):
 
+    #classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'randomforest': RandomForestClassifier, 'mlp': MLPClassifier}
+    #classifier = 'multinomialnb' if 'classifier' not in kwargs else kwargs['classifier']
+    ranking = False if 'ranking' not in kwargs else kwargs['ranking']
+    p = 5 if 'top_p' not in kwargs else kwargs['top_p']
+
+    #for parametrization
+    total_accuracy = 0
+
     for q in q_test:
 
         sol_labels = []
-        o_labels = []
-        probs = {}
+        o_labels_training = []
+        trained_probs = {}
 
-        classifier = training(q, d_train, r_train, classifier='multinomialnb')
+        trained_classifier = training(q, d_train, r_train, **kwargs)
 
         judged_docs = []
         for doc_id in r_test[q]:
             judged_docs.append(doc_id)
         
         for doc_id in judged_docs:
-            prob = classify([d_test[doc_id]], q, classifier)[0][1]
-            probs[doc_id] = prob
+
+            trained_prob = classify([d_test[doc_id]], q, trained_classifier)
+            trained_probs[doc_id] = trained_prob
             sol_labels.append(r_test[q][doc_id])
-            o_labels.append(1 if prob > 0.5 else 0)
+            o_labels_training.append(1 if trained_prob > 0.5 else 0)
 
         results = {}
-        results['accuracy'] = accuracy_score(sol_labels, o_labels)
-        results['precision-micro'] = precision_score(sol_labels, o_labels, average='micro', zero_division=1)
-        results['precision-macro'] = precision_score(sol_labels, o_labels, average='macro', zero_division=1)
-        results['recall-micro'] =  recall_score(sol_labels, o_labels, average='micro')
-        results['recall-macro'] =  recall_score(sol_labels, o_labels, average='macro')
-        results['f-beta-micro'] = fbeta_score(sol_labels, o_labels, average='micro', beta=0.5)
-        results['f-beta-macro'] = fbeta_score(sol_labels, o_labels, average='macro', beta=0.5)
+        
+        results['accuracy'] = accuracy_score(sol_labels, o_labels_training)
+        results['precision-micro'] = precision_score(sol_labels, o_labels_training, average='micro', zero_division=1)
+        results['precision-macro'] = precision_score(sol_labels, o_labels_training, average='macro', zero_division=1)
+        results['recall-micro'] =  recall_score(sol_labels, o_labels_training, average='micro')
+        results['recall-macro'] =  recall_score(sol_labels, o_labels_training, average='macro')
+        results['f-beta-micro'] = fbeta_score(sol_labels, o_labels_training, average='micro', beta=0.5)
+        results['f-beta-macro'] = fbeta_score(sol_labels, o_labels_training, average='macro', beta=0.5)
 
-        display_results(q, results)
+        if ranking:
+            sort_probs = sorted(trained_probs, key = trained_probs.get, reverse=True)
 
-    return
+            ranked_result = []
+            result_range = range(p) if p <= len(sort_probs) else range(len(sort_probs))
+            for i in result_range:
+                doc_id = sort_probs[i]
+                ranked_result.append((doc_id, round(trained_probs[doc_id], 4)))
+
+            results['ranking'] = ranked_result
+
+        #display_results(q, results)
+
+        #for parametrization
+        total_accuracy += results['accuracy']
+
+    return total_accuracy / len(q_test)
 
 # --------------------------------------------------------------------------------
 # ~ Just the Main Function ~
@@ -232,11 +261,32 @@ def main():
     r_test = r_set[0]
     r_train = r_set[1]
 
-    q_test = [120,123]
+    q_test = list(range(120,140))
 
-    evaluate(q_test, d_test, r_test)
+    #evaluate(q_test, d_test, r_test, ranking=True, classifier='multinomialnb')
 
-    topics = get_topics('material/')
+    #for parametrization
+    for classifier in ['multinomialnb','kneighbors','randomforest','mlp']:
+        
+        best = (0,0)
+        best_acc = 0
+
+        min_df = 0
+        while min_df <= 8:
+            max_df = 0.6
+            while max_df < 1:
+                acc = evaluate(q_test, d_test, r_test, ranking=True, classifier=classifier, min_df=min_df, max_df=max_df)
+                if acc > best_acc:
+                    best = (min_df, max_df)
+                    best_acc = acc
+                max_df += 0.05
+            min_df += 1
+
+        topics = get_topics('material/')
+
+        print(classifier)
+        print(best)
+        print(best_acc)
 
     return
 
