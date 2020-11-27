@@ -15,7 +15,6 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.cluster import *
 
 # File imports
-
 from file_treatment import read_from_file
 from data_set_treatment import tfidf_process
 from data_set_treatment import get_topics
@@ -23,8 +22,6 @@ from data_set_treatment import get_R_set
 from data_set_treatment import process_collection
 
 topics = {}
-
-
 
 # --------------------------------------------------------------------------------
 # get_clustering_score() - Gets a clustering methods score based on supervised, unsupervised
@@ -137,7 +134,7 @@ def clustering(D, **kwargs):
     y = []
 
     if mode == 'docs':
-        tfidf_vec_info = tfidf_process(D, **kwargs)
+        tfidf_vec_info = tfidf_process(D, remove_stopwords='English', **kwargs)
         doc_keys = tfidf_vec_info[1]
         doc_vectors = tfidf_vec_info[2]
 
@@ -165,9 +162,11 @@ def clustering(D, **kwargs):
 
     # trainAgglomerative
     clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
+
     # TODO: add more 
     clusters = list(range(2,21)) if 'clusters' not in kwargs else kwargs['clusters']
     distances = ['euclidean'] if 'distance' not in kwargs else kwargs['distance']
+    top_cluster_words = 5 if 'top_cluster_words' not in kwargs else kwargs['top_cluster_words']
     
     best_clusters = [None, None, 0]
     for method in clustering_methods:
@@ -182,7 +181,18 @@ def clustering(D, **kwargs):
 
     result = []
     for i in range(len(centroids)):
-        entry = (centroids[i], [])
+        aux_centroid = centroids[i][centroids[i] != 0.]
+        sorted_args = np.argsort(aux_centroid)
+
+        inverse_transformed = tfidf_vec_info[0].inverse_transform(centroids[i])[0]
+        n_args = len(inverse_transformed)
+        entry_range = top_cluster_words if n_args > top_cluster_words else n_args
+
+        centroid_result = []
+        for i in range(entry_range):
+            centroid_result.append(inverse_transformed[sorted_args[i]])
+
+        entry = (centroid_result, [])
         result.append(entry)
 
     for i in range(len(doc_keys)):
@@ -257,10 +267,9 @@ def evaluate(D, **kwargs):
     print("The clustering solution has k = {} clusters".format(n_clusters))
     for i in range(n_clusters):
         print("\nCluster {}:".format(i+1))
-        print("Centroid is {}".format(cluster_info[i][0]))
+        print("Centroid has top words {}".format(cluster_info[i][0]))
         print("Medoid is {} with id {}".format(name,cluster_info[i][1]))
         print("Cluster is composed by {} {}s".format(len(clusters[i][1]), name))
-    print("The clustering solution has k = {} clusters".format(n_clusters))
     
     return
 
