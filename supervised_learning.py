@@ -19,6 +19,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.linear_model import Perceptron
 from sklearn.svm import LinearSVC
+from sklearn.model_selection import GridSearchCV
 from rank_bm25 import BM25Okapi
 
 # File imports
@@ -35,6 +36,8 @@ d_test = {}
 r_train = {}
 r_test = {}
 topic_vectorizers = {}
+
+best_params = []
 
 # -----------------------------------------------------------------------------------------------------
 # create_vectorizer - Processes our entire document collection with a tf-idf vectorizer 
@@ -65,7 +68,7 @@ def create_vectorizer(doc_dic, feature_space, **kwargs):
     min_df = 2 if 'min_df' not in kwargs else kwargs['min_df']
     max_df = 0.8 if 'max_df' not in kwargs else kwargs['max_df']
     max_features = None if 'max_features' not in kwargs else kwargs['max_features']
-    stop_words = None if 'remove_stopwords' not in kwargs else kwargs['remove_stopwords']
+    stop_words = 'english' if 'remove_stopwords' not in kwargs else kwargs['remove_stopwords']
     vec = None
     doc_list_vectors = None
 
@@ -112,16 +115,19 @@ def create_vectorizer(doc_dic, feature_space, **kwargs):
 def training(q, d_train, r_train, **kwargs):
     global topic_vectorizers
 
-    classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'randomforest': RandomForestClassifier, 'mlp': MLPClassifier}
-    classifier = classifiers['multinomialnb']() if 'classifier' not in kwargs else classifiers[kwargs['classifier']]()
+    classifiers = {'multinomialnb': MultinomialNB(), 'kneighbors': KNeighborsClassifier(), 'randomforest': RandomForestClassifier(), 'mlp': MLPClassifier()}
+    #classifiers_mindf = {'multinomialnb': 4, 'kneighbors': 7, 'randomforest': 7, 'mlp': 6}
+    #classifiers_maxdf = {'multinomialnb': 0.9, 'kneighbors': 0.9, 'randomforest': 0.75, 'mlp': 0.75}
+    classifier = classifiers['multinomialnb'] if 'classifier' not in kwargs else classifiers[kwargs['classifier']]
 
+    #classifier = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_leaf=1, min_samples_split=3)
     r_labels = find_R_test_labels(r_train[q])
 
     subset_dtrain = {}
     for doc in r_labels:
         subset_dtrain[doc] = d_train[doc]
 
-    vec_results = create_vectorizer(subset_dtrain, 'idf', **kwargs)
+    vec_results = create_vectorizer(subset_dtrain, 'tf-idf', **kwargs)
     topic_vectorizers[q] = vec_results[0]
     d_train_vec = vec_results[1]
     
@@ -129,7 +135,26 @@ def training(q, d_train, r_train, **kwargs):
     
     classifier.fit(X=d_train_vec, y=r_labels)
 
-    return classifier
+    #return classifier
+
+    #for randomforest hyperparametrization
+    
+    n_estimators = [50, 100, 150, 200]
+    max_depth = [4, 6, 8, 10, 12, 14]
+    min_samples_split = [2, 5, 8, 12, 15]
+    min_samples_leaf = [1, 2, 5, 7, 10] 
+
+    hyperF = dict(n_estimators = n_estimators, max_depth = max_depth, min_samples_split = min_samples_split, min_samples_leaf = min_samples_leaf)
+
+    gridF = GridSearchCV(RandomForestClassifier(), hyperF, cv = 3, verbose = 1, n_jobs = -1)
+
+    bestF = gridF.fit(d_train_vec, r_labels)
+
+    print(bestF.best_params_)
+    best_params.append(bestF.best_params_)
+
+    return bestF
+    
 
 # --------------------------------------------------------------------------------------------------------------------------------------
 # classify
@@ -187,13 +212,9 @@ def display_results(q, results):
 # the behavior of the aided IR system
 # --------------------------------------------------------------------------------------------------------------------------------------
 def evaluate(q_test, d_test, r_test, **kwargs):
-
-    #classifiers = {'multinomialnb': MultinomialNB, 'kneighbors': KNeighborsClassifier, 'randomforest': RandomForestClassifier, 'mlp': MLPClassifier}
-    #classifier = 'multinomialnb' if 'classifier' not in kwargs else kwargs['classifier']
     ranking = False if 'ranking' not in kwargs else kwargs['ranking']
     p = 5 if 'top_p' not in kwargs else kwargs['top_p']
 
-    #for parametrization
     total_accuracy = 0
 
     for q in q_test:
@@ -238,7 +259,6 @@ def evaluate(q_test, d_test, r_test, **kwargs):
 
         #display_results(q, results)
 
-        #for parametrization
         total_accuracy += results['accuracy']
 
     return total_accuracy / len(q_test)
@@ -261,32 +281,29 @@ def main():
     r_test = r_set[0]
     r_train = r_set[1]
 
-    q_test = list(range(120,140))
+    q_test = list(range(120,160))
 
-    #evaluate(q_test, d_test, r_test, ranking=True, classifier='multinomialnb')
+    print(evaluate(q_test, d_test, r_test, ranking=True, classifier='randomforest'))
 
-    #for parametrization
-    for classifier in ['multinomialnb','kneighbors','randomforest','mlp']:
-        
-        best = (0,0)
-        best_acc = 0
+    #hyperparametrization
 
-        min_df = 0
-        while min_df <= 8:
-            max_df = 0.6
-            while max_df < 1:
-                acc = evaluate(q_test, d_test, r_test, ranking=True, classifier=classifier, min_df=min_df, max_df=max_df)
-                if acc > best_acc:
-                    best = (min_df, max_df)
-                    best_acc = acc
-                max_df += 0.05
-            min_df += 1
+    max_depth = 0
+    min_samples_leaf = 0
+    min_samples_split = 0
+    n_estimators = 0
 
-        topics = get_topics('material/')
+    for p in best_params:
+        max_depth += p['max_depth']
+        min_samples_leaf += p['min_samples_leaf']
+        min_samples_split += p['min_samples_split']
+        n_estimators += p['n_estimators']
 
-        print(classifier)
-        print(best)
-        print(best_acc)
+    n = len(best_params)
+    print("Best params")
+    print(max_depth / n)
+    print(min_samples_leaf / n)
+    print(min_samples_split / n)
+    print(n_estimators / n)
 
     return
 

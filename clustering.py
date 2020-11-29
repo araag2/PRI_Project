@@ -16,12 +16,15 @@ from sklearn.metrics.cluster import *
 
 # File imports
 from file_treatment import read_from_file
+from file_treatment import get_files_from_directory
 from data_set_treatment import tfidf_process
 from data_set_treatment import get_topics
 from data_set_treatment import get_R_set
 from data_set_treatment import process_collection
 
 topics = {}
+tfidf_vec_info = [None, None, None]
+Labels_pred = []
 
 # --------------------------------------------------------------------------------
 # get_clustering_score() - Gets a clustering methods score based on supervised, unsupervised
@@ -43,7 +46,9 @@ def get_clustering_score(x, labels_true, labels_pred, target):
         result += unsupervised_methods[method](x, labels_pred)
 
     for method in supervised_methods:
-        result += supervised_methods[method](labels_true, labels_pred)
+        score = supervised_methods[method](labels_true, labels_pred)
+        result += score
+        print('{} = {}'.format(method, score))
 
     return result / (len(unsupervised_methods) + len(supervised_methods))
 
@@ -69,7 +74,7 @@ def trainKmeans(vec_D, y, clusters, distance):
         clustering_kmeans = KMeans(n_clusters=i).fit(vec_D)
         labels_pred = clustering_kmeans.labels_
 
-        score_mean = get_clustering_score(array_D, y, labels_pred, None)
+        score_mean = get_clustering_score(array_D, y, labels_pred, 'unsupervised')
 
         if score_mean > best_result[2]:
             best_result = [clustering_kmeans, labels_pred, score_mean]  
@@ -126,15 +131,17 @@ def trainAgglomerative(vec_D, y, clusters, distance):
 # centroid and the set of document/topic ids which comprise it
 # ----------------------------------------------------------------------------------------------------
 def clustering(D, **kwargs):
+    global tfidf_vec_info
+    global labels_pred
+
     mode = 'docs' if 'mode' not in kwargs else kwargs['mode']
 
-    tfidf_vec_info = None
     doc_keys = None
     doc_vectors = None
     y = []
 
     if mode == 'docs':
-        tfidf_vec_info = tfidf_process(D, remove_stopwords='English', **kwargs)
+        tfidf_vec_info = tfidf_process(D, remove_stopwords='english', **kwargs)
         doc_keys = tfidf_vec_info[1]
         doc_vectors = tfidf_vec_info[2]
 
@@ -142,8 +149,9 @@ def clustering(D, **kwargs):
     
         for i in range(len(doc_keys)):
             y.append([])
-            for r in r_set[doc_keys[i]]:
-                y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
+            if doc_keys[i] in r_set:
+                for r in r_set[doc_keys[i]]:
+                    y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
         y = np.array(y, dtype=object)
 
     elif mode == 'topics':
@@ -155,8 +163,9 @@ def clustering(D, **kwargs):
 
         for i in range(len(doc_keys)):
             y.append([])
-            for r in r_set[doc_keys[i]]:
-                y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
+            if doc_keys[i] in r_set:
+                for r in r_set[doc_keys[i]]:
+                    y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
         y = np.array(y, dtype=object)
 
 
@@ -164,7 +173,7 @@ def clustering(D, **kwargs):
     clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
 
     # TODO: add more 
-    clusters = list(range(2,21)) if 'clusters' not in kwargs else kwargs['clusters']
+    clusters = list(range(2,10)) if 'clusters' not in kwargs else kwargs['clusters']
     distances = ['euclidean'] if 'distance' not in kwargs else kwargs['distance']
     top_cluster_words = 5 if 'top_cluster_words' not in kwargs else kwargs['top_cluster_words']
     
@@ -176,8 +185,11 @@ def clustering(D, **kwargs):
             if clustering[2] > best_clusters[2]:
                 best_clusters = clustering
 
+    #TODO: fixme
     centroids = best_clusters[0].cluster_centers_
+
     doc_labels = best_clusters[1]
+    labels_pred = best_clusters[1]
 
     result = []
     for i in range(len(centroids)):
@@ -213,7 +225,6 @@ def clustering(D, **kwargs):
 # Output: ;)
 # ----------------------------------------------------------------------------------------------------
 def interpret(cluster, D, **kwargs):
-
     documents = {}
     for doc_id in cluster[1]:
         documents[doc_id] = D[doc_id]
@@ -238,6 +249,32 @@ def get_topic_subset(q_test):
     return result
 
 # ----------------------------------------------------------------------------------------------------
+# get_category_ids() - Helper function to get category id's from collection D to serve as ground
+# truth
+# ----------------------------------------------------------------------------------------------------
+def get_category_ids(doc_keys):
+    clustered_docs = {}
+    for doc in doc_keys:
+        clustered_docs[doc] = True
+
+    D = get_files_from_directory('../rcv1/', clustered_docs)
+    D[0].extend(D[1])
+    D = D[0]
+
+    codes_y = []
+    for doc in D:
+        codes_y.append([])
+        if len(doc.find_all('codes')) > 1:
+            topic_section = doc.find_all('codes')[1]
+            topic_ids = topic_section.find_all('code')
+
+            for iden in topic_ids:
+                codes_y[-1].append(iden['code'])
+    codes_y = np.array(codes_y, dtype=object)
+
+    return codes_y
+
+# ----------------------------------------------------------------------------------------------------
 # evaluate: 
 #
 # Input: 
@@ -247,6 +284,9 @@ def get_topic_subset(q_test):
 # Output: 
 # ----------------------------------------------------------------------------------------------------
 def evaluate(D, **kwargs):
+    global tfidf_vec_info
+    global labels_pred
+
     mode = 'docs' if 'mode' not in kwargs else kwargs['mode']
     doc_dic = D
 
@@ -270,6 +310,13 @@ def evaluate(D, **kwargs):
         print("Centroid has top words {}".format(cluster_info[i][0]))
         print("Medoid is {} with id {}".format(name,cluster_info[i][1]))
         print("Cluster is composed by {} {}s".format(len(clusters[i][1]), name))
+
+    if mode == 'docs' and 'external' in kwargs and kwargs['external']:
+        print('\nExternal evaluation for clustering solution:')
+        doc_keys = tfidf_vec_info[1]
+        category_ids = get_category_ids(doc_keys)
+        final_score = get_clustering_score(None, category_ids, labels_pred, 'supervised')
+        print('\nFinal Mean supervised score = {}'.format(final_score))
     
     return
 
@@ -283,11 +330,11 @@ def main():
     topics = get_topics(material_dic)
     
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
-    #D = read_from_file('collections_processed/Dtrain_judged_collection_processed')
-    D = list(range(101, 201, 1))
+    D = get_files_from_directory('../rcv1_test/19960821/', None)[1]
+    #D = list(range(101, 201, 1))
     #print(read_from_file('topics_processed'))
 
-    evaluate(D, mode='topics')
+    evaluate(D, mode='docs', external = True)
 
 
 main()

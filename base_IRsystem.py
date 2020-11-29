@@ -506,13 +506,10 @@ def overlapping_terms():
 def main():
     global topics
     material_dic = 'material/'
-
     R_set = get_R_set(material_dic)
     topics = get_topics(material_dic)
 
-    #evaluation([120], R_set[0], [None], ranking='RRF')
-    print(topics)
-
+    
     return
 
 #main()

@@ -41,9 +41,9 @@ def get_xml_files_recursively(path, judged_documents, **kwargs):
     for f in directory_list:
         n_path = '{}{}/'.format(path,f)
         if os.path.isdir(n_path):
-            files_list.extend(get_xml_files_recursively(n_path, **kwargs))
+            files_list.extend(get_xml_files_recursively(n_path, judged_documents, **kwargs))
 
-        elif 'judged' in kwargs and kwargs['judged']:
+        elif judged_documents != None:
                 if int(f.split('news')[0]) in judged_documents:
                     files_list.append(re.sub('//','/','{}/{}'.format(path,f)))
         else:
@@ -69,7 +69,6 @@ def get_files_from_directory(path, judged_documents, **kwargs):
     parsed_files_test = []
     parsed_files_train = []
 
-    #TODO: You can remove this afterwards, just makes things faster
     if 'set' in kwargs and kwargs['set'] == 'test':
         for f in file_list:
             date_identifier = int(f.split('/')[2])
