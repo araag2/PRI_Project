@@ -9,6 +9,7 @@ import nltk
 import sklearn
 import math
 import numpy as np
+import scipy.sparse
 from sklearn.metrics import *
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -69,7 +70,7 @@ def get_clustering_score(x, labels_true, labels_pred, target):
 def trainKmeans(vec_D, y, clusters, distance):
 
     array_D = vec_D.toarray()
-    best_result = [None, None, 0]
+    best_result = [None, None, 0, 0]
     for i in clusters:
         clustering_kmeans = KMeans(n_clusters=i).fit(vec_D)
         labels_pred = clustering_kmeans.labels_
@@ -77,7 +78,7 @@ def trainKmeans(vec_D, y, clusters, distance):
         score_mean = get_clustering_score(array_D, y, labels_pred, 'unsupervised')
 
         if score_mean > best_result[2]:
-            best_result = [clustering_kmeans, labels_pred, score_mean]  
+            best_result = [clustering_kmeans, labels_pred, score_mean, i]  
 
     return best_result
 
@@ -98,7 +99,7 @@ def trainKmeans(vec_D, y, clusters, distance):
 def trainAgglomerative(vec_D, y, clusters, distance):
 
     vec_D = vec_D.toarray()
-    best_result = [None, None, 0]
+    best_result = [None, None, 0, 0]
     for i in clusters:
         clustering_agg = AgglomerativeClustering(n_clusters=i).fit(vec_D)
         labels_pred = clustering_agg.labels_
@@ -106,7 +107,7 @@ def trainAgglomerative(vec_D, y, clusters, distance):
         score_mean = get_clustering_score(vec_D, y, labels_pred, 'unsupervised')
 
         if score_mean > best_result[2]:
-            best_result = [clustering_agg, labels_pred, score_mean]
+            best_result = [clustering_agg, labels_pred, score_mean, i]
 
     return best_result
 
@@ -117,8 +118,10 @@ def trainAgglomerative(vec_D, y, clusters, distance):
 # Input: D - set of documents or topics to be clustered
 #       **kwargs - Optional parameters with the following functionality (default 
 #       values prefixed by *)
-#           clusters []: List with the number of clusters to attempt in the clustering algorithms
-#           distance [TODO]: 
+#           clusters [*range(2,20) | list of ints > 0]: List with the number of clusters to attempt in 
+#           the clustering algorithms
+#           distance [*euclidian | manhattan]: Distance measurement used 
+#           top_cluster_words [*5 | int]: Number of top words that represent each cluster 
 #
 # Behaviour: Starts by obtaining the processed collection of documents. Then vectorizes
 # them throught the function tfidf_process and obtains the vectorizer itself, the document
@@ -168,16 +171,15 @@ def clustering(D, **kwargs):
                     y[i].append('{}_{}'.format(r, r_set[doc_keys[i]][r]))
         y = np.array(y, dtype=object)
 
+    clustering_methods = [trainKmeans, trainAgglomerative] if 'methods' not in kwargs else kwargs['methods']
 
-    # trainAgglomerative
-    clustering_methods = [trainKmeans] if 'methods' not in kwargs else kwargs['methods']
-
-    # TODO: add more 
-    clusters = list(range(2,10)) if 'clusters' not in kwargs else kwargs['clusters']
+    clusters = list(range(2,100)) if 'clusters' not in kwargs else kwargs['clusters']
     distances = ['euclidean'] if 'distance' not in kwargs else kwargs['distance']
     top_cluster_words = 5 if 'top_cluster_words' not in kwargs else kwargs['top_cluster_words']
     
-    best_clusters = [None, None, 0]
+    # [Object, Labels, Score, n_clusters]
+    best_clusters = [None, None, 0, 0]
+
     for method in clustering_methods:
         for dist in distances:
             clustering = method(doc_vectors, y, clusters, dist)
@@ -185,13 +187,38 @@ def clustering(D, **kwargs):
             if clustering[2] > best_clusters[2]:
                 best_clusters = clustering
 
-    #TODO: fixme
-    centroids = best_clusters[0].cluster_centers_
-
+    result = []
     doc_labels = best_clusters[1]
     labels_pred = best_clusters[1]
 
-    result = []
+    for i in range(best_clusters[3]):
+        result.append([None,[]])
+
+    centroids = None
+
+    if type(best_clusters[0]) == KMeans:
+        centroids = np.array(best_clusters[0].cluster_centers_)
+
+        for i in range(len(doc_keys)):
+            centroid = doc_labels[i]
+            result[centroid][1].append(doc_keys[i])
+
+    else:
+        docs_per_centroid = {}
+        for i in range(len(doc_keys)):
+            centroid = doc_labels[i]
+            result[centroid][1].append(doc_keys[i])
+
+            if centroid not in docs_per_centroid:
+                docs_per_centroid[centroid] = [doc_vectors[i].toarray()[0]]
+            else:
+                docs_per_centroid[centroid].append(doc_vectors[i].toarray()[0])
+
+        centroids = []
+        for centroid in docs_per_centroid:
+            value = np.mean(docs_per_centroid[centroid], axis=0)
+            centroids.append(value)
+
     for i in range(len(centroids)):
         aux_centroid = centroids[i][centroids[i] != 0.]
         sorted_args = np.argsort(aux_centroid)
@@ -201,28 +228,27 @@ def clustering(D, **kwargs):
         entry_range = top_cluster_words if n_args > top_cluster_words else n_args
 
         centroid_result = []
-        for i in range(entry_range):
-            centroid_result.append(inverse_transformed[sorted_args[i]])
+        for j in range(entry_range):
+            centroid_result.append(inverse_transformed[sorted_args[j]])
 
-        entry = (centroid_result, [])
-        result.append(entry)
-
-    for i in range(len(doc_keys)):
-        result[doc_labels[i]][1].append(doc_keys[i]) 
+        entry = centroid_result
+        result[i][0] = entry
 
     return result
 
 # ----------------------------------------------------------------------------------------------------
-# interpret(): Evaluates clusters in terms of median (centroid) and medoid criteria
+# interpret(): Outputs the representation of a cluster cointaining a median (centroid) and a medoid 
 #
 # Input: cluster - A document/topic cluster
 #        D - Set of documents or topics in cluster
 #       **kwargs - Optional parameters with the following functionality (default 
 #       values prefixed by *)
 #
-# Behaviour: it's a surprise :)
+# Behaviour: Creates a TF-IDF Vectorizer to process pairwise distances between each document in
+# a cluster to calculate its medoid, and uses previous information to represent the centroid.
 #
-# Output: ;)
+# Output: A list with centroid representation in top cluster words, and a medoid represented by
+# a document or topic id 
 # ----------------------------------------------------------------------------------------------------
 def interpret(cluster, D, **kwargs):
     documents = {}
@@ -275,13 +301,17 @@ def get_category_ids(doc_keys):
     return codes_y
 
 # ----------------------------------------------------------------------------------------------------
-# evaluate: 
+# evaluate: Serves as the main class for the clustering process and outputs its results 
 #
-# Input: 
+# Input: D - Document or topic collection to use
+#        **kwargs - Optional parameters with the following functionality (default 
+#        values prefixed by *)
+#           mode [*docs | topics]: Chooses if we are running a topic or document collection 
 #
-# Behaviour: 
+# Behaviour: It encapsulates the entirity of the clustering process and prints its output results
+# ordered by the result of each individual cluster.
 #
-# Output: 
+# Output: None
 # ----------------------------------------------------------------------------------------------------
 def evaluate(D, **kwargs):
     global tfidf_vec_info
@@ -310,6 +340,7 @@ def evaluate(D, **kwargs):
         print("Centroid has top words {}".format(cluster_info[i][0]))
         print("Medoid is {} with id {}".format(name,cluster_info[i][1]))
         print("Cluster is composed by {} {}s".format(len(clusters[i][1]), name))
+        print("{}s in cluster -> {}".format(name, clusters[i][1]))
 
     if mode == 'docs' and 'external' in kwargs and kwargs['external']:
         print('\nExternal evaluation for clustering solution:')
@@ -330,11 +361,11 @@ def main():
     topics = get_topics(material_dic)
     
     #D_set = get_files_from_directory('../rcv1_test/19961001')[1]
-    D = get_files_from_directory('../rcv1_test/19960821/', None)[1]
-    #D = list(range(101, 201, 1))
+    #D = get_files_from_directory('../rcv1_test/19960821/', None)[1]
+    D = list(range(101, 201, 1))
     #print(read_from_file('topics_processed'))
 
-    evaluate(D, mode='docs', external = True)
+    evaluate(D, mode='topics')
 
 
 main()
