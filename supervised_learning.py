@@ -58,6 +58,7 @@ best_params = []
 #
 # Output: The created Vectorizer and the entire doc collection in vector form.
 # -----------------------------------------------------------------------------------------------------
+
 def create_vectorizer(doc_dic, feature_space, **kwargs):
     doc_keys = list(doc_dic.keys())
     doc_list = []
@@ -89,10 +90,6 @@ def create_vectorizer(doc_dic, feature_space, **kwargs):
     elif feature_space == 'tf-idf':
         vec = TfidfVectorizer(norm=norm, min_df=min_df, max_df=max_df, max_features=max_features, stop_words= stop_words)
 
-    #TODO
-    elif feature_space == 'bm25':
-        return
-
     if type(vec) != list:
         vec.fit(doc_list)
         doc_list_vectors = vec.transform(doc_list)
@@ -100,16 +97,18 @@ def create_vectorizer(doc_dic, feature_space, **kwargs):
     return [vec, doc_list_vectors]
     
 # --------------------------------------------------------------------------------------------------------------------------------------
-# training 
+# training - Trains a classification model for a given topic
 #
 # Input: q - topic document
 #        d_train - training collection
 #        r_train - judgements
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               classifier [*multinomialnb | kneighbors | randomforest | mlp] - Classifier model used for training
 #    
 # Behaviour: Learns a classification model to predict the relevance of documents on the
-# topic q using Dtrain and Rtrain, where the training process is subjected to
-# proper preprocessing, classifier’s selection and hyperparameterization
-#    
+# topic q using the documents in the d_train collection, and their respective judgements r_train, that have been labeled for topic q.
+# The vectors created from he subset of d_train relevant for topic q are stored in list for use in the classification function.
+#
 # Output: q-conditional classification model
 # --------------------------------------------------------------------------------------------------------------------------------------
 
@@ -117,11 +116,8 @@ def training(q, d_train, r_train, **kwargs):
     global topic_vectorizers
 
     classifiers = {'multinomialnb': MultinomialNB(), 'kneighbors': KNeighborsClassifier(), 'randomforest': RandomForestClassifier(), 'mlp': MLPClassifier()}
-    #classifiers_mindf = {'multinomialnb': 4, 'kneighbors': 7, 'randomforest': 7, 'mlp': 6}
-    #classifiers_maxdf = {'multinomialnb': 0.9, 'kneighbors': 0.9, 'randomforest': 0.75, 'mlp': 0.75}
     classifier = classifiers['multinomialnb'] if 'classifier' not in kwargs else classifiers[kwargs['classifier']]
 
-    classifier = RandomForestClassifier(max_depth=6, min_samples_leaf=1, min_samples_split=4, n_estimators=400)
     r_labels = find_R_test_labels(r_train[q])
 
     subset_dtrain = {}
@@ -138,36 +134,18 @@ def training(q, d_train, r_train, **kwargs):
 
     return classifier
 
-    #for randomforest hyperparametrization
-    '''
-    n_estimators = [100, 200, 400, 1000, 2000]
-    max_depth = [4, 6, 8, 10]
-    min_samples_split = [2, 4, 6, 8]
-    min_samples_leaf = [1, 2, 3, 5] 
-
-    hyperF = dict(n_estimators = n_estimators, max_depth = max_depth, min_samples_split = min_samples_split, min_samples_leaf = min_samples_leaf)
-
-    gridF = GridSearchCV(RandomForestClassifier(), hyperF, cv = 3, verbose = 1, n_jobs = -1)
-
-    bestF = gridF.fit(d_train_vec, r_labels)
-
-    print(bestF.best_params_)
-    best_params.append(bestF.best_params_)
-
-    return bestF
-    '''
-
 # --------------------------------------------------------------------------------------------------------------------------------------
-# classify
+# classify - Calculates the probability of a document being relevant for a given topic
 # 
 # Input: d - document
 #        q - topic
 #        M - classification model
 #
-# Behaviour: classifies the probability of document d to be relevant for topic q given M
+# Behaviour: classifies the probability of document d to be relevant for topic q given M, using a vectorizer
+# created during the training function
 #
 # Output: probabilistic classification output on the relevance of document d to the
-# topic q using the previously trained classification model M
+# topic q
 # --------------------------------------------------------------------------------------------------------------------------------------
 
 def classify(d, q, M, **kwargs):
@@ -199,19 +177,23 @@ def display_results(q, results):
     return
 
 # --------------------------------------------------------------------------------------------------------------------------------------
-# evaluate 
+# evaluate - Evaluates accuracy, precision and recall of the IR system using relevance feedback
 # 
 # Input: q_test - subset of topics
 #        d_test - testing document collection
 #        r_test - judgements
+#        **kwargs - Optional parameters with the following functionality (default values prefixed by *)
+#               ranking [*False | True] - Use of page ranking in evaluation
+#               p [*5 | int] - Number of pages displayed in page ranking
 # 
-# Behaviour: evaluates the behavior of the IR system in the presence and absence of
-# relevance feedback. In the presence of relevance feedback, training and
-# testing functions are called for each topic in Qtest for a more comprehensive assessment
+# Behaviour: evaluates the behavior of the IR system in the presence of
+# relevance feedback. Training and testing functions are called for each topic in 
+# Qtest for a more comprehensive assessment. Prints performance statistics regarding 
+# the underlying classification system and the behavior of the aided IR system
 #
-# Output: performance statistics regarding the underlying classification system and
-# the behavior of the aided IR system
+# Output: Returns total accuracy of the IR system
 # --------------------------------------------------------------------------------------------------------------------------------------
+
 def evaluate(q_test, d_test, r_test, **kwargs):
     ranking = False if 'ranking' not in kwargs else kwargs['ranking']
     p = 5 if 'top_p' not in kwargs else kwargs['top_p']
@@ -258,7 +240,7 @@ def evaluate(q_test, d_test, r_test, **kwargs):
 
             results['ranking'] = ranked_result
 
-        #display_results(q, results)
+        display_results(q, results)
 
         total_accuracy += results['accuracy']
 
@@ -284,28 +266,8 @@ def main():
 
     q_test = list(range(120,130))
 
-    print(evaluate(q_test, d_test, r_test, ranking=True, classifier='randomforest'))
+    evaluate(q_test, d_test, r_test, ranking=True, classifier='randomforest')
 
-    #hyperparametrization
-    '''
-    max_depth = 0
-    min_samples_leaf = 0
-    min_samples_split = 0
-    n_estimators = 0
-
-    for p in best_params:
-        max_depth += p['max_depth']
-        min_samples_leaf += p['min_samples_leaf']
-        min_samples_split += p['min_samples_split']
-        n_estimators += p['n_estimators']
-
-    n = len(best_params)
-    print("Best params")
-    print(max_depth / n)
-    print(min_samples_leaf / n)
-    print(min_samples_split / n)
-    print(n_estimators / n)
-    '''
     return
 
 

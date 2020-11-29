@@ -439,9 +439,7 @@ def display_results_per_q(q, results_ranked, results_boolean):
 # -----------------------------------------------------------------------------------------------------
 def evaluation(Q_test, R_test, D_test, **kwargs):
     # Standard index execution
-    I = index.open_dir("index_judged_docs_dir", indexname='index_judged_docs')
-
-    #I = indexing(D_test, **kwargs)[0]
+    I = indexing(D_test, **kwargs)[0]
 
     results_ranked = {}
     results_boolean = {}

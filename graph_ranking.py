@@ -426,7 +426,7 @@ def display_results_page_rank(q, results_page_rank):
 #
 # Output: Full statistical analysis for the provided input args
 # -----------------------------------------------------------------------------------------------------
-def evaluation(Q_test, R_test, D_test, **kwargs):
+def evaluation_gr(Q_test, R_test, D_test, **kwargs):
 
     results_page_rank = {}
     theta_range = [0.20, 0.25, 0.30, 0.35, 0.40] if 'theta_range' not in kwargs else kwargs['theta_range']
